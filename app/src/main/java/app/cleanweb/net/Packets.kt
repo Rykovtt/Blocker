@@ -11,8 +11,82 @@ class UdpPacket(
 )
 
 /** Minimal IPv4/IPv6 + UDP parsing and building. Only what DNS needs. */
+/** A TCP SYN read from the tunnel (only needed to refuse it quickly). */
+class TcpSyn(
+    val ipVersion: Int,
+    val srcAddr: ByteArray,
+    val dstAddr: ByteArray,
+    val srcPort: Int,
+    val dstPort: Int,
+    val seq: Long,
+)
+
 object Packets {
     private const val PROTO_UDP = 17
+    private const val PROTO_TCP = 6
+
+    /** Returns the SYN if [buf] is a TCP connection attempt, else null. */
+    fun parseTcpSyn(buf: ByteArray, len: Int): TcpSyn? {
+        if (len < 1) return null
+        val v = (buf[0].toInt() shr 4) and 0xF
+        val proto: Int
+        val ipHeader: Int
+        val src: ByteArray
+        val dst: ByteArray
+        when (v) {
+            4 -> {
+                ipHeader = (buf[0].toInt() and 0xF) * 4
+                if (ipHeader < 20 || len < ipHeader + 20) return null
+                proto = buf[9].toInt() and 0xFF
+                src = buf.copyOfRange(12, 16)
+                dst = buf.copyOfRange(16, 20)
+            }
+            6 -> {
+                ipHeader = 40
+                if (len < 60) return null
+                proto = buf[6].toInt() and 0xFF
+                src = buf.copyOfRange(8, 24)
+                dst = buf.copyOfRange(24, 40)
+            }
+            else -> return null
+        }
+        if (proto != PROTO_TCP) return null
+        val flags = buf[ipHeader + 13].toInt() and 0xFF
+        if (flags and 0x02 == 0 || flags and 0x10 != 0) return null // SYN without ACK
+        return TcpSyn(v, src, dst, u16(buf, ipHeader), u16(buf, ipHeader + 2), u32(buf, ipHeader + 4))
+    }
+
+    /** RST+ACK answering [syn], so the app gives up at once instead of timing out. */
+    fun buildRst(syn: TcpSyn): ByteArray {
+        val ipHeader = if (syn.ipVersion == 4) 20 else 40
+        val out = ByteArray(ipHeader + 20)
+        if (syn.ipVersion == 4) {
+            out[0] = 0x45
+            put16(out, 2, out.size)
+            put16(out, 6, 0x4000)
+            out[8] = 64
+            out[9] = PROTO_TCP.toByte()
+            syn.dstAddr.copyInto(out, 12)
+            syn.srcAddr.copyInto(out, 16)
+            put16(out, 10, checksum(out, 0, 20, 0))
+        } else {
+            out[0] = 0x60
+            put16(out, 4, 20)
+            out[6] = PROTO_TCP.toByte()
+            out[7] = 64
+            syn.dstAddr.copyInto(out, 8)
+            syn.srcAddr.copyInto(out, 24)
+        }
+        val t = ipHeader
+        put16(out, t, syn.dstPort)
+        put16(out, t + 2, syn.srcPort)
+        put32(out, t + 8, ((syn.seq + 1) and 0xFFFFFFFFL).toInt()) // ack
+        out[t + 12] = 0x50 // header length 20
+        out[t + 13] = 0x14 // RST + ACK
+        val pseudo = wordSum(syn.dstAddr) + wordSum(syn.srcAddr) + PROTO_TCP + 20
+        put16(out, t + 16, checksum(out, t, 20, pseudo))
+        return out
+    }
 
     fun parseUdp(buf: ByteArray, len: Int): UdpPacket? {
         if (len < 1) return null

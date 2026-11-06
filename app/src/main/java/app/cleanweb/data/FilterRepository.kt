@@ -201,6 +201,20 @@ class FilterRepository(private val context: Context) {
         return FilterEngine(rules)
     }
 
+    /** Lists (with enabled flags), user rules and whitelist, for the backup file. */
+    fun exportJson(): JSONObject = JSONObject()
+        .put("lists", JSONArray(prefs.getString(K_LISTS, "[]")))
+        .put("userRules", userRules())
+        .put("whitelist", whitelist())
+
+    fun importJson(o: JSONObject) {
+        o.optJSONArray("lists")?.let { prefs.edit().putString(K_LISTS, it.toString()).commit() }
+        synchronized(this) { _lists.value = loadLists() }
+        userRulesFile.writeText(o.optString("userRules"))
+        whitelistFile.writeText(o.optString("whitelist"))
+        bump()
+    }
+
     private fun bump() { _version.value++ }
 
     companion object {

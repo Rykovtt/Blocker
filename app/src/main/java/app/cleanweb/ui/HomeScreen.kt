@@ -23,7 +23,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -41,7 +44,9 @@ import kotlinx.coroutines.delay
 import java.text.NumberFormat
 
 @Composable
-fun HomeScreen(vm: MainViewModel, startProtection: ((Boolean) -> Unit) -> Unit, modifier: Modifier) {
+fun HomeScreen(vm: MainViewModel, startProtection: ((Boolean) -> Unit) -> Unit, modifier: Modifier, openStats: () -> Unit) {
+    var reporting by remember { mutableStateOf(false) }
+    val update by vm.update.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
     val status by vm.status.collectAsStateWithLifecycle()
     val stats by vm.homeStats.collectAsStateWithLifecycle()
@@ -110,6 +115,13 @@ fun HomeScreen(vm: MainViewModel, startProtection: ((Boolean) -> Unit) -> Unit, 
         }
         Spacer(Modifier.height(16.dp))
 
+        update?.let { u ->
+            AlertCard(
+                stringResource(R.string.update_title, u.version), stringResource(R.string.update_body),
+                stringResource(R.string.update_download),
+                { DeviceChecks.startSafely(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(u.pageUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
+            )
+        }
         error?.let { AlertCard(stringResource(R.string.home_problem), stringResource(it), null, {}, error = true) }
         if (privateDns) {
             AlertCard(
@@ -139,7 +151,7 @@ fun HomeScreen(vm: MainViewModel, startProtection: ((Boolean) -> Unit) -> Unit, 
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(stringResource(R.string.home_mode_full_soon), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.home_mode_hardcoded), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (stats.topBlocked.isNotEmpty()) {
@@ -151,8 +163,13 @@ fun HomeScreen(vm: MainViewModel, startProtection: ((Boolean) -> Unit) -> Unit, 
                 }
             }
         }
-        Spacer(Modifier.height(24.dp))
+        Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = openStats, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.stats_title)) }
+            OutlinedButton(onClick = { reporting = true }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.report_button)) }
+        }
+        Spacer(Modifier.height(16.dp))
     }
+    if (reporting) ReportDialog { reporting = false }
 }
 
 @Composable

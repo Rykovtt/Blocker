@@ -26,6 +26,7 @@ import app.cleanweb.net.Packets
 import app.cleanweb.net.UdpPacket
 import app.cleanweb.system.Notifications
 import app.cleanweb.system.ProtectionTileService
+import app.cleanweb.widget.ProtectionWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -118,6 +119,7 @@ class BlockerVpnService : VpnService() {
     /** (Re)creates the tunnel. Called on start and when the excluded-apps list changes. */
     private fun establish(): Boolean {
         val settings = graph.settings.current
+        resolver?.close()
         resolver = UpstreamResolver(this, settings)
         val builder = Builder()
             .setSession(getString(R.string.app_name))
@@ -129,6 +131,9 @@ class BlockerVpnService : VpnService() {
             .addAddress(TUN_V6, 128)
             .addRoute(DNS_V6, 128)
             .addDnsServer(DNS_V6)
+        // Apps that skip system DNS and ask a public resolver directly are caught too.
+        for (ip in HARDCODED_DNS_V4) builder.addRoute(ip, 32)
+        for (ip in HARDCODED_DNS_V6) builder.addRoute(ip, 128)
         if (Build.VERSION.SDK_INT >= 29) builder.setMetered(false)
         // Our own traffic (DoH, list downloads) must not loop through the tunnel.
         builder.addDisallowedApplication(packageName)
@@ -179,7 +184,7 @@ class BlockerVpnService : VpnService() {
         // Excluded apps or upstream changed: rebuild the tunnel.
         jobs += scope.launch {
             graph.settings.state
-                .map { Triple(it.excludedApps, it.upstream, it.customUpstream) }
+                .map { listOf(it.excludedApps, it.upstream, it.customUpstream, it.protocol) }
                 .distinctUntilChanged()
                 .drop(1)
                 .collectLatest { main.post { if (tun != null) establish() } }
@@ -193,6 +198,7 @@ class BlockerVpnService : VpnService() {
                     val today = graph.log.countsSince(QueryLog.startOfToday()).blocked
                     if (shown != today to s) {
                         Notifications.update(this@BlockerVpnService, s, today)
+                        ProtectionWidget.render(this@BlockerVpnService, s, today)
                         shown = today to s
                     }
                 }
@@ -226,7 +232,12 @@ class BlockerVpnService : VpnService() {
                         if (e.errno == OsConstants.EAGAIN || e.errno == OsConstants.EINTR) continue else break
                     }
                     if (n <= 0) continue
-                    val pkt = Packets.parseUdp(buf, n) ?: continue
+                    val pkt = Packets.parseUdp(buf, n)
+                    if (pkt == null) {
+                        // TCP to a captured resolver (DoH/DoT/DNS-over-TCP): refuse so the app falls back to normal DNS.
+                        Packets.parseTcpSyn(buf, n)?.let { syn -> runCatching { tunnel.write(Packets.buildRst(syn)) } }
+                        continue
+                    }
                     if (pkt.dstPort != 53) continue
                     try {
                         workers.execute { handle(pkt, tunnel) }
@@ -375,7 +386,13 @@ class BlockerVpnService : VpnService() {
         super.onDestroy()
     }
 
-    private fun requestTileUpdate() = ProtectionTileService.requestUpdate(this)
+    private fun requestTileUpdate() {
+        ProtectionTileService.requestUpdate(this)
+        if (BlockerState.status.value == ProtectionStatus.STOPPED) {
+            val app = applicationContext
+            Thread { runCatching { ProtectionWidget.render(app, ProtectionStatus.STOPPED, graph.log.countsSince(QueryLog.startOfToday()).blocked) } }.start()
+        }
+    }
 
     companion object {
         private const val TAG = "CleanWebVpn"
@@ -383,6 +400,15 @@ class BlockerVpnService : VpnService() {
         private const val DNS_V4 = "10.111.222.1"
         private const val TUN_V6 = "fd66:6c74:7765::2"
         private const val DNS_V6 = "fd66:6c74:7765::1"
+
+        private val HARDCODED_DNS_V4 = listOf(
+            "8.8.8.8", "8.8.4.4", "1.1.1.1", "1.0.0.1", "9.9.9.9", "149.112.112.112",
+            "208.67.222.222", "208.67.220.220", "94.140.14.14", "94.140.15.15", "77.88.8.8", "77.88.8.1",
+        )
+        private val HARDCODED_DNS_V6 = listOf(
+            "2001:4860:4860::8888", "2001:4860:4860::8844", "2606:4700:4700::1111", "2606:4700:4700::1001",
+            "2620:fe::fe", "2620:fe::9",
+        )
 
         const val ACTION_START = "app.cleanweb.action.START"
         const val ACTION_STOP = "app.cleanweb.action.STOP"

@@ -6,12 +6,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-enum class Upstream(val id: String, val label: String, val dohUrl: String, val plainIp: String) {
-    CLOUDFLARE("cloudflare", "Cloudflare", "https://cloudflare-dns.com/dns-query", "1.1.1.1"),
-    QUAD9("quad9", "Quad9", "https://dns.quad9.net/dns-query", "9.9.9.9"),
-    ADGUARD("adguard", "AdGuard DNS", "https://dns.adguard-dns.com/dns-query", "94.140.14.14"),
-    GOOGLE("google", "Google", "https://dns.google/dns-query", "8.8.8.8"),
-    CUSTOM("custom", "", "", "1.1.1.1");
+enum class Upstream(val id: String, val label: String, val dohUrl: String, val dotHost: String, val plainIp: String) {
+    CLOUDFLARE("cloudflare", "Cloudflare", "https://cloudflare-dns.com/dns-query", "one.one.one.one", "1.1.1.1"),
+    QUAD9("quad9", "Quad9", "https://dns.quad9.net/dns-query", "dns.quad9.net", "9.9.9.9"),
+    ADGUARD("adguard", "AdGuard DNS", "https://dns.adguard-dns.com/dns-query", "dns.adguard-dns.com", "94.140.14.14"),
+    GOOGLE("google", "Google", "https://dns.google/dns-query", "dns.google", "8.8.8.8"),
+    CUSTOM("custom", "", "", "", "1.1.1.1");
 
     companion object {
         fun byId(id: String?) = entries.firstOrNull { it.id == id } ?: CLOUDFLARE
@@ -19,6 +19,8 @@ enum class Upstream(val id: String, val label: String, val dohUrl: String, val p
 }
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
+
+enum class DnsProtocol { DOH, DOT }
 
 data class SettingsState(
     val onboardingDone: Boolean,
@@ -28,6 +30,7 @@ data class SettingsState(
     val logEnabled: Boolean,
     val logRetentionDays: Int,
     val upstream: Upstream,
+    val protocol: DnsProtocol,
     val customUpstream: String,
     val theme: ThemeMode,
     val excludedApps: Set<String>,
@@ -48,6 +51,7 @@ class Settings(context: Context) {
         logEnabled = prefs.getBoolean(K_LOG, true),
         logRetentionDays = prefs.getInt(K_RETENTION, 7),
         upstream = Upstream.byId(prefs.getString(K_UPSTREAM, null)),
+        protocol = runCatching { DnsProtocol.valueOf(prefs.getString(K_PROTOCOL, "DOH")!!) }.getOrDefault(DnsProtocol.DOH),
         customUpstream = prefs.getString(K_CUSTOM, "") ?: "",
         theme = runCatching { ThemeMode.valueOf(prefs.getString(K_THEME, "SYSTEM")!!) }.getOrDefault(ThemeMode.SYSTEM),
         excludedApps = prefs.getStringSet(K_EXCLUDED, null) ?: DEFAULT_EXCLUDED_APPS,
@@ -66,11 +70,25 @@ class Settings(context: Context) {
     fun setLogRetentionDays(v: Int) = edit { putInt(K_RETENTION, v) }
     fun setUpstream(u: Upstream, custom: String = current.customUpstream) =
         edit { putString(K_UPSTREAM, u.id); putString(K_CUSTOM, custom.trim()) }
+    fun setProtocol(p: DnsProtocol) = edit { putString(K_PROTOCOL, p.name) }
     fun setTheme(t: ThemeMode) = edit { putString(K_THEME, t.name) }
     fun setAppExcluded(pkg: String, excluded: Boolean) = edit {
         val set = current.excludedApps.toMutableSet()
         if (excluded) set.add(pkg) else set.remove(pkg)
         putStringSet(K_EXCLUDED, set)
+    }
+
+    /** All settings as plain values, for the backup file. */
+    fun export(): Map<String, Any?> = prefs.all
+
+    fun import(values: Map<String, Any?>) = edit {
+        clear()
+        for ((k, v) in values) when (v) {
+            is Boolean -> putBoolean(k, v)
+            is Int -> putInt(k, v)
+            is String -> putString(k, v)
+            is Set<*> -> putStringSet(k, v.map { it.toString() }.toSet())
+        }
     }
 
     companion object {
@@ -83,6 +101,7 @@ class Settings(context: Context) {
         private const val K_UPSTREAM = "upstream"
         private const val K_CUSTOM = "custom_upstream"
         private const val K_THEME = "theme"
+        private const val K_PROTOCOL = "dns_protocol"
         private const val K_EXCLUDED = "excluded_apps"
 
         /** Banking and government apps that are kept outside the VPN by default. */

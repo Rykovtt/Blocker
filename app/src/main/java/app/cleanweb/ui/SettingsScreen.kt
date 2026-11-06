@@ -31,6 +31,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.cleanweb.BuildConfig
 import app.cleanweb.R
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import app.cleanweb.data.DnsProtocol
 import app.cleanweb.data.ThemeMode
 import app.cleanweb.data.Upstream
 import app.cleanweb.system.DeviceChecks
@@ -40,6 +43,12 @@ fun SettingsScreen(vm: MainViewModel, modifier: Modifier) {
     val s by vm.settings.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
     var custom by remember(s.customUpstream) { mutableStateOf(s.customUpstream) }
+    val saveBackup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri?.let { vm.exportBackup(it) }
+    }
+    val openBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { vm.importBackup(it) }
+    }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         SectionTitle(stringResource(R.string.settings_dns))
@@ -48,6 +57,11 @@ fun SettingsScreen(vm: MainViewModel, modifier: Modifier) {
                 text = if (u == Upstream.CUSTOM) stringResource(R.string.settings_dns_custom) else u.label,
                 selected = s.upstream == u,
             ) { vm.setUpstream(u, custom) }
+        }
+        if (s.upstream != Upstream.CUSTOM) {
+            Text(stringResource(R.string.settings_protocol), Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.bodyLarge)
+            RadioRow("DNS-over-HTTPS (DoH)", s.protocol == DnsProtocol.DOH) { vm.setProtocol(DnsProtocol.DOH) }
+            RadioRow("DNS-over-TLS (DoT)", s.protocol == DnsProtocol.DOT) { vm.setProtocol(DnsProtocol.DOT) }
         }
         if (s.upstream == Upstream.CUSTOM) {
             OutlinedTextField(
@@ -111,7 +125,23 @@ fun SettingsScreen(vm: MainViewModel, modifier: Modifier) {
             )
         }
 
+        SectionTitle(stringResource(R.string.settings_backup))
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.settings_backup_save)) },
+            supportingContent = { Text(stringResource(R.string.settings_backup_save_hint)) },
+            modifier = Modifier.clickable { saveBackup.launch("cleanweb-backup.json") },
+        )
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.settings_backup_restore)) },
+            supportingContent = { Text(stringResource(R.string.settings_backup_restore_hint)) },
+            modifier = Modifier.clickable { openBackup.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
+        )
+
         SectionTitle(stringResource(R.string.settings_about))
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.settings_check_updates)) },
+            modifier = Modifier.clickable { vm.checkUpdates(manual = true) },
+        )
         ListItem(
             headlineContent = { Text(stringResource(R.string.app_name) + " " + BuildConfig.VERSION_NAME) },
             supportingContent = { Text(stringResource(R.string.settings_about_privacy)) },

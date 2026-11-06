@@ -92,6 +92,27 @@ class QueryLog(context: Context) {
             arrayOf(since.toString()),
         ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0) to c.getInt(1)) } }
 
+    /** Blocked and total requests per time bucket, oldest first. */
+    fun series(since: Long, bucketMs: Long, buckets: Int): List<DayCounts> {
+        val out = MutableList(buckets) { DayCounts(0, 0) }
+        db.rawQuery(
+            "SELECT (ts - ?) / ? b, COUNT(*), SUM(status = 1) FROM log WHERE ts >= ? GROUP BY b",
+            arrayOf(since.toString(), bucketMs.toString(), since.toString()),
+        ).use { c ->
+            while (c.moveToNext()) {
+                val b = c.getInt(0)
+                if (b in 0 until buckets) out[b] = DayCounts(c.getInt(1), c.getInt(2))
+            }
+        }
+        return out
+    }
+
+    fun topApps(since: Long, limit: Int): List<Pair<String, Int>> =
+        db.rawQuery(
+            "SELECT app, COUNT(*) n FROM log WHERE status = 1 AND ts >= ? AND app IS NOT NULL GROUP BY app ORDER BY n DESC LIMIT $limit",
+            arrayOf(since.toString()),
+        ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0) to c.getInt(1)) } }
+
     fun purgeOlderThan(days: Int) {
         val cutoff = System.currentTimeMillis() - days * 86_400_000L
         writer.execute { db.delete("log", "ts < ?", arrayOf(cutoff.toString())) }

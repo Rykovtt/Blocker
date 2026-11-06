@@ -1,6 +1,7 @@
 package app.cleanweb.vpn
 
 import android.net.VpnService
+import app.cleanweb.data.DnsProtocol
 import app.cleanweb.data.SettingsState
 import app.cleanweb.data.Upstream
 import app.cleanweb.dns.Dns
@@ -20,14 +21,29 @@ import java.net.URL
  */
 class UpstreamResolver(private val vpn: VpnService, settings: SettingsState) {
     private val dohUrl: URL?
+    private val dot: DotClient?
     private val udpServer: InetAddress
 
     init {
         val custom = settings.customUpstream
+        var dotClient: DotClient? = null
         when {
+            settings.upstream != Upstream.CUSTOM && settings.protocol == DnsProtocol.DOT -> {
+                dohUrl = null
+                dotClient = DotClient(settings.upstream.dotHost, 853)
+                udpServer = InetAddress.getByName(settings.upstream.plainIp)
+            }
             settings.upstream != Upstream.CUSTOM -> {
                 dohUrl = URL(settings.upstream.dohUrl)
                 udpServer = InetAddress.getByName(settings.upstream.plainIp)
+            }
+            custom.startsWith("tls://") -> {
+                val hp = custom.removePrefix("tls://").trimEnd('/')
+                val host = hp.substringBeforeLast(':', hp).ifBlank { "one.one.one.one" }
+                val port = hp.substringAfterLast(':', "").toIntOrNull() ?: 853
+                dohUrl = null
+                dotClient = DotClient(host, port)
+                udpServer = InetAddress.getByName(Upstream.CLOUDFLARE.plainIp)
             }
             custom.startsWith("https://") -> {
                 dohUrl = URL(custom)
@@ -39,6 +55,7 @@ class UpstreamResolver(private val vpn: VpnService, settings: SettingsState) {
                     .getOrElse { InetAddress.getByName("1.1.1.1") }
             }
         }
+        dot = dotClient
     }
 
     private class Cached(val data: ByteArray, val expires: Long)
@@ -54,7 +71,8 @@ class UpstreamResolver(private val vpn: VpnService, settings: SettingsState) {
             val hit = cache[key]
             if (hit != null && hit.expires > now) return Dns.withId(hit.data, q.id)
         }
-        val resp = (dohUrl?.let { runCatching { doh(it, query) }.getOrNull() })
+        val resp = (dot?.let { runCatching { it.exchange(query) }.getOrNull() })
+            ?: (dohUrl?.let { runCatching { doh(it, query) }.getOrNull() })
             ?: runCatching { udp(query) }.getOrNull()
             ?: return null
         val rcode = Dns.rcode(resp)
@@ -66,6 +84,8 @@ class UpstreamResolver(private val vpn: VpnService, settings: SettingsState) {
     }
 
     fun clearCache() = synchronized(cache) { cache.clear() }
+
+    fun close() = dot?.close()
 
     private fun doh(url: URL, query: ByteArray): ByteArray {
         val conn = url.openConnection() as HttpURLConnection

@@ -39,34 +39,38 @@ private enum class Tab(@StringRes val title: Int, @DrawableRes val iconRes: Int?
     APPS(R.string.tab_apps, R.drawable.ic_apps, null),
 }
 
+enum class Overlay(@StringRes val title: Int) { SETTINGS(R.string.settings_title), STATS(R.string.stats_title) }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(vm: MainViewModel, startProtection: ((Boolean) -> Unit) -> Unit) {
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
-    var showSettings by rememberSaveable { mutableStateOf(false) }
+    var overlay by rememberSaveable { mutableStateOf<Overlay?>(null) }
+    val showSettings = overlay != null
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         vm.ensureFiltersDownloaded()
+        vm.checkUpdates(manual = false)
         vm.messages.collect { snackbar.showSnackbar(context.getString(it)) }
     }
-    BackHandler(enabled = showSettings) { showSettings = false }
+    BackHandler(enabled = showSettings) { overlay = null }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(if (showSettings) R.string.settings_title else tab.title)) },
+                title = { Text(stringResource(overlay?.title ?: tab.title)) },
                 navigationIcon = {
                     if (showSettings) {
-                        IconButton(onClick = { showSettings = false }) {
+                        IconButton(onClick = { overlay = null }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
                         }
                     }
                 },
                 actions = {
                     if (!showSettings) {
-                        IconButton(onClick = { showSettings = true }) {
+                        IconButton(onClick = { overlay = Overlay.SETTINGS }) {
                             Icon(Icons.Filled.Settings, stringResource(R.string.settings_title))
                         }
                     }
@@ -92,11 +96,11 @@ fun MainScreen(vm: MainViewModel, startProtection: ((Boolean) -> Unit) -> Unit) 
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         val m = Modifier.padding(padding)
-        if (showSettings) {
-            SettingsScreen(vm, m)
-        } else {
-            when (tab) {
-                Tab.HOME -> HomeScreen(vm, startProtection, m)
+        when (overlay) {
+            Overlay.SETTINGS -> SettingsScreen(vm, m)
+            Overlay.STATS -> StatsScreen(vm, m)
+            null -> when (tab) {
+                Tab.HOME -> HomeScreen(vm, startProtection, m) { overlay = Overlay.STATS }
                 Tab.LOG -> LogScreen(vm, m)
                 Tab.FILTERS -> FiltersScreen(vm, m)
                 Tab.APPS -> AppsScreen(vm, m)
