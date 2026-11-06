@@ -284,7 +284,10 @@ class BlockerVpnService : VpnService() {
         val verdict = if (paused) Verdict.NONE else engine.check(q.name)
         val response: ByteArray
         val status: QueryStatus
-        if (verdict == Verdict.BLOCKED) {
+        if (q.name == FIREFOX_DOH_CANARY) {
+            response = Dns.errorResponse(pkt.payload, q, rcode = 3) // NXDOMAIN: Firefox then leaves DoH off
+            status = QueryStatus.BLOCKED
+        } else if (verdict == Verdict.BLOCKED) {
             response = Dns.blockedResponse(pkt.payload, q)
             status = QueryStatus.BLOCKED
         } else {
@@ -400,6 +403,8 @@ class BlockerVpnService : VpnService() {
         private const val DNS_V4 = "10.111.222.1"
         private const val TUN_V6 = "fd66:6c74:7765::2"
         private const val DNS_V6 = "fd66:6c74:7765::1"
+
+        private const val FIREFOX_DOH_CANARY = "use-application-dns.net"
 
         private val HARDCODED_DNS_V4 = listOf(
             "8.8.8.8", "8.8.4.4", "1.1.1.1", "1.0.0.1", "9.9.9.9", "149.112.112.112",

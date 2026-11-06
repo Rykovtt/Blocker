@@ -50,6 +50,11 @@
     <string name="home_button_on">ON</string>
     <string name="home_mode_dns">DNS filtering: ads, trackers and malicious domains</string>
     <string name="home_mode_hardcoded">Apps that ask Google, Cloudflare or other public DNS directly are filtered too.</string>
+    <string name="push_card_title">Ads still popping up?</string>
+    <string name="push_card_body">Ads that appear over other apps are usually notifications from sites you once allowed. Turn them off in the browser.</string>
+    <string name="push_card_action">Turn off site notifications</string>
+    <string name="push_title">Site notifications</string>
+    <string name="push_body">Open your browser below and turn off notifications from unknown sites (or all sites). In Chrome you can also go to Settings → Site settings → Notifications.</string>
     <string name="stats_title">Statistics</string>
     <string name="stats_day">Day</string>
     <string name="stats_week">Week</string>

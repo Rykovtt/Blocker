@@ -95,7 +95,8 @@ class FilterRepository(private val context: Context) {
         bump()
     }
 
-    fun hasAnyDownloaded(): Boolean = _lists.value.any { it.enabled && File(dir, "${it.id}.txt").exists() }
+    /** True if some enabled list has never been downloaded (e.g. a list added in an app update). */
+    fun hasMissingLists(): Boolean = _lists.value.any { it.enabled && !File(dir, "${it.id}.txt").exists() }
 
     /** Downloads every enabled list. Returns the number of lists that failed. */
     suspend fun updateAll(): Int = updateLock.withLock {
@@ -227,6 +228,12 @@ class FilterRepository(private val context: Context) {
             FilterList("ruadlist", "RU AdList", "https://easylist-downloads.adblockplus.org/ruadlist.txt", true, true),
             FilterList("adguard_base", "AdGuard Base", "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt", true, true),
             FilterList("urlhaus", "URLhaus Malicious URL Blocklist", "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-agh.txt", true, true),
+            // Pop-up, pop-under and redirect ad networks.
+            FilterList("hagezi_popup", "HaGeZi Pop-Up Ads", "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/popupads.txt", true, true),
+            // Browsers' own encrypted DNS (Chrome/Samsung "Secure DNS") would skip the filter; blocking it makes them fall back.
+            FilterList("hagezi_doh", "HaGeZi Encrypted DNS Bypass", "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/doh.txt", true, true),
+            // Stronger all-in-one list; off by default because it can break some sites.
+            FilterList("hagezi_pro", "HaGeZi Multi PRO", "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/pro.txt", true, false),
         )
     }
 }

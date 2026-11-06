@@ -46,6 +46,7 @@ import java.text.NumberFormat
 @Composable
 fun HomeScreen(vm: MainViewModel, startProtection: ((Boolean) -> Unit) -> Unit, modifier: Modifier, openStats: () -> Unit) {
     var reporting by remember { mutableStateOf(false) }
+    var pushHelp by remember { mutableStateOf(false) }
     val update by vm.update.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
     val status by vm.status.collectAsStateWithLifecycle()
@@ -163,6 +164,10 @@ fun HomeScreen(vm: MainViewModel, startProtection: ((Boolean) -> Unit) -> Unit, 
                 }
             }
         }
+        AlertCard(
+            stringResource(R.string.push_card_title), stringResource(R.string.push_card_body),
+            stringResource(R.string.push_card_action), { pushHelp = true },
+        )
         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = openStats, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.stats_title)) }
             OutlinedButton(onClick = { reporting = true }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.report_button)) }
@@ -170,6 +175,7 @@ fun HomeScreen(vm: MainViewModel, startProtection: ((Boolean) -> Unit) -> Unit, 
         Spacer(Modifier.height(16.dp))
     }
     if (reporting) ReportDialog { reporting = false }
+    if (pushHelp) SiteNotificationsDialog { pushHelp = false }
 }
 
 @Composable

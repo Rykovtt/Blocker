@@ -120,9 +120,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _messages.emit(if (failed == 0) R.string.msg_filters_updated else R.string.msg_filters_partial)
     }
 
-    /** First run: fetch lists if nothing is downloaded yet. */
+    /** Fetch lists that are enabled but not downloaded yet (first run, or new lists after an update). */
     fun ensureFiltersDownloaded() {
-        if (!g.filters.hasAnyDownloaded() && !g.filters.updating.value) updateFilters()
+        if (g.filters.hasMissingLists() && !g.filters.updating.value) updateFilters()
     }
 
     fun setListEnabled(id: String, enabled: Boolean) = io { g.filters.setEnabled(id, enabled) }

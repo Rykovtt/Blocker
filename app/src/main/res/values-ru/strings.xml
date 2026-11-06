@@ -49,6 +49,11 @@
     <string name="home_button_on">ВКЛ</string>
     <string name="home_mode_dns">DNS-фильтрация: реклама, трекеры и вредоносные домены</string>
     <string name="home_mode_hardcoded">Приложения, которые обращаются к Google, Cloudflare и другим публичным DNS напрямую, тоже фильтруются.</string>
+    <string name="push_card_title">Всплывает реклама?</string>
+    <string name="push_card_body">Реклама поверх других приложений — обычно это уведомления от сайтов, которым когда-то разрешили их присылать. Отключите их в браузере.</string>
+    <string name="push_card_action">Отключить уведомления сайтов</string>
+    <string name="push_title">Уведомления сайтов</string>
+    <string name="push_body">Откройте браузер ниже и отключите уведомления от незнакомых сайтов (или от всех). В Chrome также: Настройки → Настройки сайтов → Уведомления.</string>
     <string name="stats_title">Статистика</string>
     <string name="stats_day">День</string>
     <string name="stats_week">Неделя</string>

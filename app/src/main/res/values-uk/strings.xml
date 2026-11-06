@@ -49,6 +49,11 @@
     <string name="home_button_on">УВІМК</string>
     <string name="home_mode_dns">DNS-фільтрація: реклама, трекери та шкідливі домени</string>
     <string name="home_mode_hardcoded">Застосунки, що звертаються до Google, Cloudflare та інших публічних DNS напряму, теж фільтруються.</string>
+    <string name="push_card_title">Вискакує реклама?</string>
+    <string name="push_card_body">Реклама поверх інших застосунків — зазвичай це сповіщення від сайтів, яким колись дозволили їх надсилати. Вимкніть їх у браузері.</string>
+    <string name="push_card_action">Вимкнути сповіщення сайтів</string>
+    <string name="push_title">Сповіщення сайтів</string>
+    <string name="push_body">Відкрийте браузер нижче та вимкніть сповіщення від незнайомих сайтів (або від усіх). У Chrome також: Налаштування → Налаштування сайтів → Сповіщення.</string>
     <string name="stats_title">Статистика</string>
     <string name="stats_day">День</string>
     <string name="stats_week">Тиждень</string>
