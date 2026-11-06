@@ -70,6 +70,9 @@
     <string name="qb_empty">За последние 5 минут ничего нет. Защита включена?</string>
     <string name="qb_essential_title">Заблокировать %1$s?</string>
     <string name="qb_essential_body">От этого домена зависят многие приложения и сайты — после блокировки они могут перестать работать. Отменить можно в «Фильтры» → «Мои правила».</string>
+    <string name="samsung_card_title">Блокировка всплывающих окон в Samsung Internet</string>
+    <string name="samsung_card_body">Samsung Internet умеет применять правила CleanWeb прямо на странице: рекламные вкладки не будут открываться вовсе, а рекламные блоки исчезнут. Включите CleanWeb: Samsung Internet → Меню → Дополнения → Блокировщики рекламы.</string>
+    <string name="samsung_card_action">Открыть Samsung Internet</string>
     <string name="stats_title">Статистика</string>
     <string name="stats_day">День</string>
     <string name="stats_week">Неделя</string>

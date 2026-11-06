@@ -122,10 +122,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Fetch lists that are enabled but not downloaded yet (first run, or new lists after an update). */
     fun ensureFiltersDownloaded() {
-        if (g.filters.hasMissingLists() && !g.filters.updating.value) updateFilters()
+        if (g.filters.hasMissingLists() && !g.filters.updating.value) {
+            viewModelScope.launch { g.filters.updateAll(onlyMissing = true) }
+        }
     }
 
-    fun setListEnabled(id: String, enabled: Boolean) = io { g.filters.setEnabled(id, enabled) }
+    fun setListEnabled(id: String, enabled: Boolean) = viewModelScope.launch {
+        withContext(Dispatchers.IO) { g.filters.setEnabled(id, enabled) }
+        // Fetch a newly enabled list right away instead of waiting for the daily update.
+        if (enabled && !g.filters.isDownloaded(id)) {
+            val failed = g.filters.updateAll(onlyMissing = true)
+            _messages.emit(if (failed == 0) R.string.msg_filters_updated else R.string.msg_filters_partial)
+        }
+    }
     fun removeList(id: String) = io { g.filters.remove(id) }
     fun addList(url: String, name: String) = viewModelScope.launch {
         val added = withContext(Dispatchers.IO) { g.filters.addCustom(url, name) }

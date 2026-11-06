@@ -16,3 +16,19 @@ class DomainsTest {
         assertEquals(listOf("ads6.ads.kingads.digital", "foo.example.org"), Domains.hostsInText(text))
     }
 }
+
+class TldRuleTest {
+    private fun engine(vararg l: String) =
+        app.cleanweb.filter.FilterEngine(app.cleanweb.filter.RuleSet().apply { l.forEach { addLine(it) } })
+
+    @Test fun blocksAbusedTldWithExceptions() {
+        val e = engine("||*.win^\$denyallow=patriots.win|realdeals.win", "||bid^")
+        assertEquals(app.cleanweb.filter.Verdict.BLOCKED, e.check("ofjvnvjf.win"))
+        assertEquals(app.cleanweb.filter.Verdict.BLOCKED, e.check("a.b.hazilloorty.win"))
+        assertEquals(app.cleanweb.filter.Verdict.NONE, e.check("patriots.win"))
+        assertEquals(app.cleanweb.filter.Verdict.NONE, e.check("www.realdeals.win"))
+        assertEquals(app.cleanweb.filter.Verdict.BLOCKED, e.check("x.bid"))
+        assertEquals(app.cleanweb.filter.Verdict.NONE, e.check("example.com"))
+        assertEquals(app.cleanweb.filter.Verdict.NONE, e.check("win"))
+    }
+}

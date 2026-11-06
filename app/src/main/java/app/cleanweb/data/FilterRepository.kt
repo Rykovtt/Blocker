@@ -25,6 +25,8 @@ data class FilterList(
     val lastUpdated: Long = 0,
     val ruleCount: Int = 0,
     val lastError: String? = null,
+    /** Alternative addresses tried in order when [url] fails. */
+    val mirrors: List<String> = emptyList(),
 )
 
 /**
@@ -80,6 +82,8 @@ class FilterRepository(private val context: Context) {
         bump()
     }
 
+    fun isDownloaded(id: String) = File(dir, "$id.txt").exists()
+
     fun addCustom(url: String, name: String): FilterList? {
         val u = url.trim()
         if (!u.startsWith("https://") && !u.startsWith("http://")) return null
@@ -98,14 +102,14 @@ class FilterRepository(private val context: Context) {
     /** True if some enabled list has never been downloaded (e.g. a list added in an app update). */
     fun hasMissingLists(): Boolean = _lists.value.any { it.enabled && !File(dir, "${it.id}.txt").exists() }
 
-    /** Downloads every enabled list. Returns the number of lists that failed. */
-    suspend fun updateAll(): Int = updateLock.withLock {
+    /** Downloads every enabled list (or only [onlyMissing] ones). Returns the number that failed. */
+    suspend fun updateAll(onlyMissing: Boolean = false): Int = updateLock.withLock {
         _updating.value = true
         var failed = 0
         try {
             withContext(Dispatchers.IO) {
-                for (list in _lists.value.filter { it.enabled }) {
-                    val result = runCatching { download(list) }
+                for (list in _lists.value.filter { it.enabled && (!onlyMissing || !isDownloaded(it.id)) }) {
+                    val result = runCatching { downloadWithMirrors(list) }
                     result.onSuccess { count ->
                         modify(list.id) { it.copy(lastUpdated = System.currentTimeMillis(), ruleCount = count, lastError = null) }
                     }.onFailure { e ->
@@ -121,8 +125,20 @@ class FilterRepository(private val context: Context) {
         failed
     }
 
-    private fun download(list: FilterList): Int {
-        val conn = (URL(list.url).openConnection() as HttpURLConnection).apply {
+    private fun downloadWithMirrors(list: FilterList): Int {
+        var last: Throwable? = null
+        for (url in listOf(list.url) + list.mirrors) {
+            try {
+                return download(list, url)
+            } catch (e: Exception) {
+                last = e
+            }
+        }
+        throw last ?: IllegalStateException("no address")
+    }
+
+    private fun download(list: FilterList, url: String): Int {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
             readTimeout = 30_000
             setRequestProperty("User-Agent", "CleanWeb/1.0")
@@ -134,13 +150,13 @@ class FilterRepository(private val context: Context) {
             var count = 0
             tmp.bufferedWriter().use { out ->
                 conn.inputStream.bufferedReader().useLines { lines ->
-                    for (line in lines) {
-                        // Keep only lines DNS filtering can use: smaller files, faster loading.
-                        if (probe.addLine(line)) {
-                            out.write(line.trim())
-                            out.write('\n'.code)
-                            count++
-                        }
+                    for (raw in lines) {
+                        val line = raw.trim()
+                        if (line.isEmpty() || line.startsWith("!")) continue
+                        // Keep every rule: DNS uses the domain ones, Samsung Internet uses all of them.
+                        out.write(line)
+                        out.write('\n'.code)
+                        if (probe.addLine(line) || line.contains("##") || line.contains('$') || line.contains('/')) count++
                     }
                 }
             }
@@ -156,6 +172,11 @@ class FilterRepository(private val context: Context) {
     }
 
     // ---- user rules and whitelist ----
+
+    fun needsFullRedownload() = prefs.getInt(K_FORMAT, 1) < 2 && _lists.value.any { isDownloaded(it.id) }
+    fun markFullDownloaded() = prefs.edit().putInt(K_FORMAT, 2).apply()
+
+    fun listFile(id: String) = File(dir, "$id.txt")
 
     fun userRules(): String = userRulesFile.takeIf { it.exists() }?.readText() ?: ""
     fun whitelist(): String = whitelistFile.takeIf { it.exists() }?.readText() ?: ""
@@ -230,6 +251,19 @@ class FilterRepository(private val context: Context) {
 
     companion object {
         private const val K_LISTS = "lists"
+        private const val K_FORMAT = "file_format"
+
+        private const val GH = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/"
+        private val HAGEZI_MIRRORS = listOf(
+            "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/",
+            "https://gitlab.com/hagezi/mirror/-/raw/main/dns-blocklists/adblock/",
+            "https://codeberg.org/hagezi/mirror2/raw/branch/main/dns-blocklists/adblock/",
+        )
+        private fun hagezi(id: String, name: String, file: String, enabled: Boolean) =
+            FilterList(id, name, GH + file, true, enabled, mirrors = HAGEZI_MIRRORS.map { it + file })
+
+        /** Lists whose full rules (paths, element hiding, $popup) go to Samsung Internet. */
+        val BROWSER_LISTS = setOf("easylist", "easyprivacy", "ruadlist", "adguard_base")
 
         val BUILTIN = listOf(
             FilterList("adguard_dns", "AdGuard DNS filter", "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt", true, true),
@@ -239,11 +273,13 @@ class FilterRepository(private val context: Context) {
             FilterList("adguard_base", "AdGuard Base", "https://filters.adtidy.org/extension/ublock/filters/2_without_easylist.txt", true, true),
             FilterList("urlhaus", "URLhaus Malicious URL Blocklist", "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-agh.txt", true, true),
             // Pop-up, pop-under and redirect ad networks.
-            FilterList("hagezi_popup", "HaGeZi Pop-Up Ads", "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/popupads.txt", true, true),
+            hagezi("hagezi_popup", "HaGeZi Pop-Up Ads", "popupads.txt", true),
+            // Whole abused domain zones (.win, .bid, …): stops pop-ups from endlessly rotating random domains.
+            hagezi("hagezi_tlds", "HaGeZi Abused TLDs", "spam-tlds.txt", true),
             // Browsers' own encrypted DNS (Chrome/Samsung "Secure DNS") would skip the filter; blocking it makes them fall back.
-            FilterList("hagezi_doh", "HaGeZi Encrypted DNS Bypass", "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/doh.txt", true, true),
+            hagezi("hagezi_doh", "HaGeZi Encrypted DNS Bypass", "doh.txt", true),
             // Stronger all-in-one list; off by default because it can break some sites.
-            FilterList("hagezi_pro", "HaGeZi Multi PRO", "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/pro.txt", true, false),
+            hagezi("hagezi_pro", "HaGeZi Multi PRO", "pro.txt", false),
         )
     }
 }

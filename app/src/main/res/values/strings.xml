@@ -71,6 +71,9 @@
     <string name="qb_empty">Nothing in the last 5 minutes. Is protection on?</string>
     <string name="qb_essential_title">Block %1$s?</string>
     <string name="qb_essential_body">Many apps and sites depend on this domain. Blocking it may break them. You can undo it in Filters → My rules.</string>
+    <string name="samsung_card_title">Block pop-ups inside Samsung Internet</string>
+    <string name="samsung_card_body">Samsung Internet can use CleanWeb rules inside pages: ad tabs will not open at all, and ad blocks disappear. Turn on CleanWeb in Samsung Internet → Menu → Add-ons → Ad blockers.</string>
+    <string name="samsung_card_action">Open Samsung Internet</string>
     <string name="stats_title">Statistics</string>
     <string name="stats_day">Day</string>
     <string name="stats_week">Week</string>

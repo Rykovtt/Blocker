@@ -70,6 +70,9 @@
     <string name="qb_empty">За останні 5 хвилин нічого немає. Захист увімкнено?</string>
     <string name="qb_essential_title">Заблокувати %1$s?</string>
     <string name="qb_essential_body">Від цього домену залежать багато застосунків і сайтів — після блокування вони можуть перестати працювати. Скасувати можна у «Фільтри» → «Мої правила».</string>
+    <string name="samsung_card_title">Блокування спливаючих вікон у Samsung Internet</string>
+    <string name="samsung_card_body">Samsung Internet вміє застосовувати правила CleanWeb прямо на сторінці: рекламні вкладки не відкриватимуться взагалі, а рекламні блоки зникнуть. Увімкніть CleanWeb: Samsung Internet → Меню → Додатки → Блокувальники реклами.</string>
+    <string name="samsung_card_action">Відкрити Samsung Internet</string>
     <string name="stats_title">Статистика</string>
     <string name="stats_day">День</string>
     <string name="stats_week">Тиждень</string>

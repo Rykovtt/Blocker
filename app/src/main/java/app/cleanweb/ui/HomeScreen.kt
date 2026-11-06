@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.cleanweb.R
+import app.cleanweb.samsung.SamsungBlocker
 import app.cleanweb.system.DeviceChecks
 import app.cleanweb.vpn.BlockerVpnService
 import app.cleanweb.vpn.ProtectionStatus
@@ -164,6 +165,19 @@ fun HomeScreen(vm: MainViewModel, startProtection: ((Boolean) -> Unit) -> Unit, 
                     Text(nf.format(n), color = BlockedColor)
                 }
             }
+        }
+        val samsungInstalled = remember { SamsungBlocker.isBrowserInstalled(ctx) }
+        val samsungUsed = remember(stats) { SamsungBlocker.lastRead(ctx) > 0 }
+        if (samsungInstalled && !samsungUsed) {
+            AlertCard(
+                stringResource(R.string.samsung_card_title), stringResource(R.string.samsung_card_body),
+                stringResource(R.string.samsung_card_action),
+                {
+                    val i = SamsungBlocker.settingsIntent(ctx)
+                    if (i != null) DeviceChecks.startSafely(ctx, i)
+                    else DeviceChecks.startSafely(ctx, Intent(Intent.ACTION_VIEW, Uri.parse("internet://settings")).setPackage("com.sec.android.app.sbrowser").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), ctx.packageManager.getLaunchIntentForPackage("com.sec.android.app.sbrowser"))
+                },
+            )
         }
         Button(
             onClick = { ctx.startActivity(QuickBlockActivity.intent(ctx)) },

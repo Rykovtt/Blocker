@@ -13,8 +13,11 @@ class RuleSet {
     internal val blockWild = HashSet<String>()
     internal val allowExact = HashSet<String>()
     internal val allowWild = HashSet<String>()
+    /** Whole top-level domains (e.g. "win") from abused-TLD lists, and the sites excused from them. */
+    internal val blockTld = HashSet<String>()
+    internal val tldExceptions = HashSet<String>()
 
-    val size: Int get() = blockExact.size + blockWild.size + allowExact.size + allowWild.size
+    val size: Int get() = blockExact.size + blockWild.size + allowExact.size + allowWild.size + blockTld.size
 
     /** Adds one line of a filter list. Returns true if it produced a rule. */
     fun addLine(raw: String): Boolean {
@@ -30,6 +33,19 @@ class RuleSet {
             return true
         }
         if (line.startsWith("||")) {
+            TLD_RULE.matchEntire(line)?.let { m ->
+                val zone = m.groupValues[1].lowercase()
+                val excused = m.groupValues[2].split('|').mapNotNull { normalizeDomain(it) }
+                if (zone.contains('.')) {
+                    // A second-level zone such as *.us.kg: block it like a domain, excuse listed sites.
+                    blockWild.add(zone)
+                    allowWild.addAll(excused)
+                } else {
+                    blockTld.add(zone)
+                    tldExceptions.addAll(excused)
+                }
+                return true
+            }
             val d = adblockDomain(line) ?: return false
             blockWild.add(d)
             return true
@@ -67,6 +83,8 @@ class RuleSet {
 
     companion object {
         private val WHITESPACE = Regex("\\s+")
+        // ||*.win^  ||win^  ||*.win^$denyallow=a.win|b.win
+        private val TLD_RULE = Regex("^\\|\\|(?:\\*\\.)?([A-Za-z][A-Za-z0-9-]{1,62}(?:\\.[A-Za-z][A-Za-z0-9-]{1,62})?)\\^(?:\\\$denyallow=([^,\\s]+))?$")
         private val COSMETIC = listOf("##", "#@#", "#?#", "#$#", "#%#")
         private val HOSTS_IGNORED = setOf(
             "localhost", "localhost.localdomain", "local", "broadcasthost",
