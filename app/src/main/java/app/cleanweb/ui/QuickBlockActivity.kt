@@ -6,32 +6,31 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,7 +41,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -84,7 +82,6 @@ class QuickBlockActivity : ComponentActivity() {
 
 private class SiteRow(val site: String, val hosts: List<String>, val app: String?, val lastSeen: Long, val blocked: Boolean)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun QuickBlockScreen(shared: List<String>, onClose: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -123,36 +120,42 @@ private fun QuickBlockScreen(shared: List<String>, onClose: () -> Unit) {
     }
     fun ask(site: String) { if (Domains.isEssential(site)) confirm = site else block(site) }
 
+    val c = Cw.colors
     Scaffold(
+        containerColor = c.background,
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.qb_title)) },
-                navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.Filled.Close, stringResource(R.string.back)) } },
-            )
+            Row(
+                Modifier.fillMaxWidth().statusBarsPadding().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                NeuIconButton(onClose, stringResource(R.string.back), Icons.Filled.Close)
+                Spacer(Modifier.width(16.dp))
+                ScreenTitle(stringResource(R.string.qb_title), Modifier.weight(1f))
+            }
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
             if (shared.isNotEmpty()) {
                 item {
-                    Card(Modifier.fillMaxWidth().padding(16.dp)) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(stringResource(R.string.qb_shared_title), style = MaterialTheme.typography.titleSmall)
-                            shared.forEach { host ->
-                                val site = Domains.site(host)
-                                val already = g.filters.isBlocked(host, BlockerState.engine)
-                                Text(host, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                if (already) {
-                                    Text(stringResource(R.string.qb_already), style = MaterialTheme.typography.bodySmall)
-                                } else {
-                                    Button(onClick = { ask(site) }, modifier = Modifier.fillMaxWidth()) {
-                                        Text(stringResource(R.string.qb_block_site, site))
-                                    }
-                                    if (host != site) {
-                                        OutlinedButton(onClick = { scope.launch { withContext(Dispatchers.IO) { g.filters.blockDomain(host) }; refresh++; snackbar.showSnackbar(ctx.getString(R.string.qb_blocked, host)) } }, modifier = Modifier.fillMaxWidth()) {
-                                            Text(stringResource(R.string.qb_block_host))
-                                        }
-                                    }
+                    NeuCard(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), radius = 32.dp) {
+                        Text(stringResource(R.string.qb_shared_title).uppercase(), style = MaterialTheme.typography.labelLarge, color = c.textMuted)
+                        shared.forEach { host ->
+                            val site = Domains.site(host)
+                            val already = g.filters.isBlocked(host, BlockerState.engine)
+                            Spacer(Modifier.height(10.dp))
+                            Text(host, color = c.text, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (already) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(stringResource(R.string.qb_already), style = MaterialTheme.typography.bodySmall, color = c.textMuted)
+                            } else {
+                                GradientButton(stringResource(R.string.qb_block_site, site), { ask(site) }, Modifier.fillMaxWidth().padding(top = 14.dp))
+                                if (host != site) {
+                                    NeuButton(
+                                        stringResource(R.string.qb_block_host),
+                                        { scope.launch { withContext(Dispatchers.IO) { g.filters.blockDomain(host) }; refresh++; snackbar.showSnackbar(ctx.getString(R.string.qb_blocked, host)) } },
+                                        Modifier.fillMaxWidth().padding(top = 12.dp),
+                                    )
                                 }
                             }
                         }
@@ -163,40 +166,44 @@ private fun QuickBlockScreen(shared: List<String>, onClose: () -> Unit) {
                 Text(
                     stringResource(R.string.qb_hint),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(16.dp),
+                    color = c.textMuted,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
                 )
             }
             if (rows.isEmpty()) {
-                item { Text(stringResource(R.string.qb_empty), Modifier.padding(16.dp)) }
+                item {
+                    NeuCard(Modifier.fillMaxWidth().padding(20.dp)) { Text(stringResource(R.string.qb_empty), color = c.textMuted) }
+                }
             }
-            items(rows, key = { it.site }) { row ->
-                ListItem(
-                    headlineContent = { Text(row.site, fontWeight = FontWeight.Medium) },
-                    supportingContent = {
-                        Text(
-                            listOfNotNull(fmt.format(Date(row.lastSeen)), row.app, row.hosts.take(3).joinToString(", ")).joinToString(" · "),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    },
-                    trailingContent = {
-                        if (row.blocked) {
-                            Text(stringResource(R.string.log_status_blocked), color = BlockedColor, style = MaterialTheme.typography.labelMedium)
-                        } else {
-                            TextButton(onClick = { ask(row.site) }) { Text(stringResource(R.string.qb_block)) }
-                        }
-                    },
+            itemsIndexed(rows, key = { _, r -> r.site }) { i, row ->
+                val first = i == 0
+                val last = i == rows.lastIndex
+                val shape = RoundedCornerShape(
+                    topStart = if (first) 28.dp else 0.dp, topEnd = if (first) 28.dp else 0.dp,
+                    bottomStart = if (last) 28.dp else 0.dp, bottomEnd = if (last) 28.dp else 0.dp,
                 )
-                HorizontalDivider()
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).clip(shape).background(c.surface)) {
+                    if (!first) RowDivider()
+                    NeuRow(
+                        row.site,
+                        listOfNotNull(fmt.format(Date(row.lastSeen)), row.app, row.hosts.take(3).joinToString(", ")).joinToString(" · "),
+                    ) {
+                        if (row.blocked) {
+                            Text(stringResource(R.string.log_status_blocked), color = c.blocked, style = MaterialTheme.typography.labelMedium)
+                        } else {
+                            NeuChip(true, stringResource(R.string.qb_block)) { ask(row.site) }
+                        }
+                    }
+                }
             }
+            item { Spacer(Modifier.height(24.dp)) }
         }
     }
 
     confirm?.let { site ->
         AlertDialog(
             onDismissRequest = { confirm = null },
+            shape = RoundedCornerShape(32.dp),
             title = { Text(stringResource(R.string.qb_essential_title, site)) },
             text = { Text(stringResource(R.string.qb_essential_body)) },
             confirmButton = { TextButton(onClick = { block(site); confirm = null }) { Text(stringResource(R.string.qb_block)) } },

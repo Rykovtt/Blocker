@@ -46,7 +46,7 @@ data class StatsData(
     val topApps: List<Pair<String, Int>>,
 )
 
-data class HomeStats(val today: DayCounts, val topBlocked: List<Pair<String, Int>>)
+data class HomeStats(val today: DayCounts, val topBlocked: List<Pair<String, Int>>, val week: List<DayCounts> = emptyList())
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val g = AppGraph.get(app)
@@ -66,7 +66,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     val homeStats = g.log.changes.map {
         val since = QueryLog.startOfToday()
-        HomeStats(g.log.countsSince(since), g.log.topBlocked(since, 5))
+        HomeStats(g.log.countsSince(since), g.log.topBlocked(since, 5), g.log.series(since - 6 * 86_400_000L, 86_400_000L, 7))
     }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeStats(DayCounts(0, 0), emptyList()))
 
     // ---- statistics ----

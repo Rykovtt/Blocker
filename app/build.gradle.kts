@@ -14,10 +14,8 @@ android {
         applicationId = "app.cleanweb"
         minSdk = 28
         targetSdk = 35
-        versionCode = 6
-        versionName = "1.5.0"
-        // Address for "report a missed ad"; empty = the user picks any app in the share sheet.
-        buildConfigField("String", "REPORT_EMAIL", "\"\"")
+        versionCode = 7
+        versionName = "1.6.0"
     }
 
     // Release signing comes from keystore.properties (not in git):
@@ -79,8 +77,19 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     testImplementation("junit:junit:4.13.2")
+    // Screenshot tests: render Compose screens on the JVM to check the design.
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.40.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.40.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
+android.testOptions.unitTests.isIncludeAndroidResources = true
 android.testOptions.unitTests.all {
     it.systemProperty("lists", (project.findProperty("lists") as String?) ?: "")
+    // Optional Maven mirror for Robolectric's Android runtime download (-ProbolectricRepo=https://…/maven2/)
+    // -PrecordScreens saves the design screenshots to app/build/outputs/roborazzi
+    if (project.hasProperty("recordScreens")) it.systemProperty("roborazzi.test.record", "true")
+    (project.findProperty("robolectricRepo") as String?)?.let { url -> it.systemProperty("robolectric.dependency.repo.url", url) }
 }

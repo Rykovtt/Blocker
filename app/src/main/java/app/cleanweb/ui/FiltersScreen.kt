@@ -3,28 +3,28 @@ package app.cleanweb.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,9 +35,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.cleanweb.R
@@ -53,46 +53,48 @@ fun FiltersScreen(vm: MainViewModel, modifier: Modifier) {
     val updating by vm.updating.collectAsStateWithLifecycle()
     var adding by remember { mutableStateOf(false) }
     var editor by remember { mutableStateOf<Editor?>(null) }
+    val c = Cw.colors
 
-    LazyColumn(modifier.fillMaxSize()) {
-        item {
-            Row(
-                Modifier.fillMaxWidth().padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Button(onClick = { vm.updateFilters() }, enabled = !updating) {
-                    if (updating) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                    else Icon(Icons.Filled.Refresh, null)
-                    Text("  " + stringResource(if (updating) R.string.filters_updating else R.string.filters_update_now))
-                }
-                OutlinedButton(onClick = { adding = true }) {
-                    Icon(Icons.Filled.Add, null)
-                    Text(" " + stringResource(R.string.filters_add_url))
-                }
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            GradientButton(
+                stringResource(if (updating) R.string.filters_updating else R.string.filters_update_now),
+                { vm.updateFilters() },
+                Modifier.weight(1f),
+                enabled = !updating,
+                leading = {
+                    if (updating) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = c.textMuted)
+                    else Icon(Icons.Filled.Refresh, null, tint = Color.White)
+                },
+            )
+            NeuButton(stringResource(R.string.action_add), { adding = true }, icon = Icons.Filled.Add, accentIcon = true)
+        }
+
+        SectionLabel(stringResource(R.string.filters_lists))
+        NeuGroup {
+            lists.forEachIndexed { i, list ->
+                if (i > 0) RowDivider()
+                FilterListRow(list, onToggle = { vm.setListEnabled(list.id, it) }, onDelete = { vm.removeList(list.id) })
             }
         }
-        item { SectionTitle(stringResource(R.string.filters_lists)) }
-        items(lists, key = { it.id }) { list ->
-            FilterListRow(list, onToggle = { vm.setListEnabled(list.id, it) }, onDelete = { vm.removeList(list.id) })
-            HorizontalDivider()
+
+        SectionLabel(stringResource(R.string.filters_own))
+        NeuGroup {
+            NeuRow(
+                stringResource(R.string.filters_my_rules), stringResource(R.string.filters_my_rules_hint),
+                onClick = { editor = Editor.RULES },
+            ) { Icon(Icons.Filled.Edit, stringResource(R.string.action_edit), tint = c.accentEnd) }
+            RowDivider()
+            NeuRow(
+                stringResource(R.string.filters_whitelist), stringResource(R.string.filters_whitelist_hint),
+                onClick = { editor = Editor.WHITELIST },
+            ) { Icon(Icons.Filled.Edit, stringResource(R.string.action_edit), tint = c.accentEnd) }
         }
-        item { SectionTitle(stringResource(R.string.filters_own)) }
-        item {
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.filters_my_rules)) },
-                supportingContent = { Text(stringResource(R.string.filters_my_rules_hint)) },
-                modifier = Modifier.padding(0.dp),
-                trailingContent = { TextButton(onClick = { editor = Editor.RULES }) { Text(stringResource(R.string.action_edit)) } },
-            )
-        }
-        item {
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.filters_whitelist)) },
-                supportingContent = { Text(stringResource(R.string.filters_whitelist_hint)) },
-                trailingContent = { TextButton(onClick = { editor = Editor.WHITELIST }) { Text(stringResource(R.string.action_edit)) } },
-            )
-        }
+        Spacer(Modifier.height(24.dp))
     }
 
     if (adding) AddListDialog(onDismiss = { adding = false }) { url, name -> vm.addList(url, name); adding = false }
@@ -109,32 +111,29 @@ fun FiltersScreen(vm: MainViewModel, modifier: Modifier) {
 
 @Composable
 private fun FilterListRow(list: FilterList, onToggle: (Boolean) -> Unit, onDelete: () -> Unit) {
+    val c = Cw.colors
     val updated = if (list.lastUpdated > 0) {
         DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(list.lastUpdated))
     } else null
-    ListItem(
-        headlineContent = { Text(list.name) },
-        supportingContent = {
-            Column {
-                Text(
-                    when {
-                        updated != null -> stringResource(R.string.filters_list_info, list.ruleCount, updated)
-                        else -> stringResource(R.string.filters_not_downloaded)
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                list.lastError?.let {
-                    Text(stringResource(R.string.filters_error, it), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
+    val subtitle = when {
+        list.lastError != null && updated == null -> stringResource(R.string.filters_error, list.lastError)
+        updated != null -> stringResource(R.string.filters_list_info, list.ruleCount, updated)
+        else -> stringResource(R.string.filters_not_downloaded)
+    }
+    NeuRow(
+        list.name,
+        subtitle,
+        subtitleColor = if (list.lastError != null && updated == null) c.blocked else null,
+        onClick = { onToggle(!list.enabled) },
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (!list.builtin) {
+                IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, stringResource(R.string.action_delete), tint = c.textMuted) }
+                Spacer(Modifier.width(4.dp))
             }
-        },
-        trailingContent = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (!list.builtin) IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, stringResource(R.string.action_delete)) }
-                Switch(checked = list.enabled, onCheckedChange = onToggle)
-            }
-        },
-    )
+            NeuSwitch(checked = list.enabled, onCheckedChange = onToggle)
+        }
+    }
 }
 
 @Composable
@@ -143,11 +142,12 @@ private fun AddListDialog(onDismiss: () -> Unit, onAdd: (String, String) -> Unit
     var name by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(32.dp),
         title = { Text(stringResource(R.string.filters_add_url)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(url, { url = it }, label = { Text("URL") }, singleLine = true)
-                OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.filters_list_name)) }, singleLine = true)
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(url, { url = it }, label = { Text("URL") }, singleLine = true, shape = FieldShape, colors = cwTextFieldColors())
+                OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.filters_list_name)) }, singleLine = true, shape = FieldShape, colors = cwTextFieldColors())
             }
         },
         confirmButton = { TextButton(onClick = { onAdd(url, name) }, enabled = url.length > 10) { Text(stringResource(R.string.action_add)) } },
@@ -167,6 +167,7 @@ private fun TextEditorDialog(
     LaunchedEffect(Unit) { text = load() }
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(32.dp),
         title = { Text(title) },
         text = {
             OutlinedTextField(
@@ -175,6 +176,8 @@ private fun TextEditorDialog(
                 placeholder = { Text(hint, fontFamily = FontFamily.Monospace) },
                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                 enabled = text != null,
+                shape = FieldShape,
+                colors = cwTextFieldColors(),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp),
             )
         },

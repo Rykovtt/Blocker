@@ -46,6 +46,7 @@ object Notifications {
         val title = context.getString(if (paused) R.string.notif_paused else R.string.notif_active)
         val b = NotificationCompat.Builder(context, CH_PROTECTION)
             .setSmallIcon(R.drawable.ic_shield)
+            .setColor(0xFF3B2DF2.toInt())
             .setContentTitle(title)
             .setContentText(context.getString(R.string.notif_blocked_today, blockedToday))
             .setContentIntent(openAppIntent(context))

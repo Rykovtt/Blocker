@@ -9,7 +9,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -45,20 +46,23 @@ fun SiteNotificationsDialog(onDismiss: () -> Unit) {
     val browsers = remember { installedBrowsers(ctx) }
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
         title = { Text(stringResource(R.string.push_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.push_body), style = MaterialTheme.typography.bodyMedium)
                 browsers.forEach { (pkg, label) ->
-                    OutlinedButton(
-                        onClick = {
+                    NeuButton(label,
+                        {
                             val i = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
                                 .putExtra(Settings.EXTRA_APP_PACKAGE, pkg)
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             runCatching { ctx.startActivity(i) }
                         },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(label) }
+                        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        icon = androidx.compose.material.icons.Icons.Filled.Notifications,
+                        accentIcon = true,
+                    )
                 }
             }
         },

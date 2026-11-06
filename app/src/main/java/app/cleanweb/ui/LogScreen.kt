@@ -3,6 +3,7 @@ package app.cleanweb.ui
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,20 +11,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -35,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -57,35 +59,61 @@ fun LogScreen(vm: MainViewModel, modifier: Modifier) {
     var selected by remember { mutableStateOf<LogEntry?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
     val fmt = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+    val c = Cw.colors
 
-    Column(modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = search,
-                onValueChange = { vm.logSearch.value = it },
-                leadingIcon = { Icon(Icons.Filled.Search, null) },
-                placeholder = { Text(stringResource(R.string.log_search)) },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = { confirmClear = true }) { Icon(Icons.Filled.Delete, stringResource(R.string.log_clear)) }
+    LazyColumn(modifier.fillMaxSize()) {
+        item {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = search,
+                    onValueChange = { vm.logSearch.value = it },
+                    leadingIcon = { Icon(Icons.Filled.Search, null) },
+                    placeholder = { Text(stringResource(R.string.log_search)) },
+                    singleLine = true,
+                    shape = FieldShape,
+                    colors = cwTextFieldColors(),
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(12.dp))
+                NeuIconButton({ confirmClear = true }, stringResource(R.string.log_clear), Icons.Filled.Delete)
+            }
         }
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(filter == null, { vm.logFilter.value = null }, { Text(stringResource(R.string.log_all)) })
-            FilterChip(filter == QueryStatus.BLOCKED, { vm.logFilter.value = QueryStatus.BLOCKED }, { Text(stringResource(R.string.log_blocked)) })
-            FilterChip(filter == QueryStatus.ALLOWED, { vm.logFilter.value = QueryStatus.ALLOWED }, { Text(stringResource(R.string.log_allowed)) })
+        item {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                NeuChip(filter == null, stringResource(R.string.log_all)) { vm.logFilter.value = null }
+                NeuChip(filter == QueryStatus.BLOCKED, stringResource(R.string.log_blocked)) { vm.logFilter.value = QueryStatus.BLOCKED }
+                NeuChip(filter == QueryStatus.ALLOWED, stringResource(R.string.log_allowed)) { vm.logFilter.value = QueryStatus.ALLOWED }
+            }
         }
         if (entries.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(stringResource(R.string.log_empty), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(32.dp))
-            }
-        } else {
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(entries) { e ->
-                    LogRow(e, fmt.format(Date(e.time))) { selected = e }
-                    HorizontalDivider()
+            item {
+                NeuCard(Modifier.fillMaxWidth().padding(20.dp)) {
+                    Text(stringResource(R.string.log_empty), color = c.textMuted, style = MaterialTheme.typography.bodyMedium)
                 }
             }
+        } else {
+            item { Spacer(Modifier.height(6.dp)) }
+            // One long rounded card, drawn piece by piece so the list stays lazy.
+            itemsIndexed(entries) { i, e ->
+                val first = i == 0
+                val last = i == entries.lastIndex
+                val shape = RoundedCornerShape(
+                    topStart = if (first) 28.dp else 0.dp, topEnd = if (first) 28.dp else 0.dp,
+                    bottomStart = if (last) 28.dp else 0.dp, bottomEnd = if (last) 28.dp else 0.dp,
+                )
+                Box(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp).clip(shape).background(c.surface),
+                ) {
+                    Column {
+                        if (!first) RowDivider()
+                        LogRow(e, fmt.format(Date(e.time))) { selected = e }
+                    }
+                }
+            }
+            item { Spacer(Modifier.height(24.dp)) }
         }
     }
 
@@ -93,6 +121,7 @@ fun LogScreen(vm: MainViewModel, modifier: Modifier) {
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
+            shape = RoundedCornerShape(32.dp),
             title = { Text(stringResource(R.string.log_clear)) },
             text = { Text(stringResource(R.string.log_clear_confirm)) },
             confirmButton = { TextButton(onClick = { vm.clearLog(); confirmClear = false }) { Text(stringResource(R.string.log_clear)) } },
@@ -104,25 +133,26 @@ fun LogScreen(vm: MainViewModel, modifier: Modifier) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun LogRow(e: LogEntry, time: String, onSelect: () -> Unit) {
+    val c = Cw.colors
     val (color, label) = when (e.status) {
-        QueryStatus.BLOCKED -> BlockedColor to R.string.log_status_blocked
-        QueryStatus.ALLOWED -> AllowedColor to R.string.log_status_allowed
-        QueryStatus.WHITELISTED -> WhitelistColor to R.string.log_status_whitelisted
-        QueryStatus.FAILED -> MaterialTheme.colorScheme.error to R.string.log_status_failed
+        QueryStatus.BLOCKED -> c.blocked to R.string.log_status_blocked
+        QueryStatus.ALLOWED -> c.allowed to R.string.log_status_allowed
+        QueryStatus.WHITELISTED -> c.accentStart to R.string.log_status_whitelisted
+        QueryStatus.FAILED -> c.warning to R.string.log_status_failed
     }
     Row(
-        Modifier.fillMaxWidth().combinedClickable(onClick = onSelect, onLongClick = onSelect).padding(horizontal = 16.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().combinedClickable(onClick = onSelect, onLongClick = onSelect).padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(10.dp).background(color, CircleShape))
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(e.domain, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(e.domain, color = c.text, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val type = when (e.qtype) { 1 -> "A"; 28 -> "AAAA"; 65 -> "HTTPS"; 5 -> "CNAME"; else -> "type ${e.qtype}" }
             Text(
                 listOfNotNull(time, e.app, type).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = c.textMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -136,6 +166,7 @@ private fun DomainDialog(e: LogEntry, vm: MainViewModel, onDismiss: () -> Unit) 
     val clipboard = LocalClipboardManager.current
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(32.dp),
         title = { Text(e.domain, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = { Text(stringResource(R.string.log_domain_hint)) },
         confirmButton = {
