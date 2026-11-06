@@ -88,3 +88,6 @@
 ||clickaine.com^
 ||pushame.com^
 ||evadav.com^
+||kingads.digital^
+||kingads.net^
+||kingads2.org^

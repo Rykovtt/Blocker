@@ -12,6 +12,9 @@ object BlockerState {
     val engineLoading = MutableStateFlow(false)
     val blockedSinceStart = MutableStateFlow(0L)
 
+    /** The filter engine in use, so the UI can tell whether a domain is already blocked. */
+    @Volatile var engine: app.cleanweb.filter.FilterEngine? = null
+
     /** String resource id of the last problem, shown on the home screen. */
     val lastError = MutableStateFlow<Int?>(null)
 }

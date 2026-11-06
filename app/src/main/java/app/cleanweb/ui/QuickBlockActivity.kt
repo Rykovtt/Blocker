@@ -1,0 +1,208 @@
+package app.cleanweb.ui
+
+import android.content.Context
+import android.content.Intent
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.cleanweb.AppGraph
+import app.cleanweb.R
+import app.cleanweb.filter.Domains
+import app.cleanweb.vpn.BlockerState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/**
+ * "Block this ad": opened from the browser's Share menu (with the ad page's address),
+ * from the notification, or from the home screen. Lists what was contacted in the last
+ * few minutes, grouped by site, so the user can block the one that showed the ad.
+ */
+class QuickBlockActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
+        val shared = if (intent?.action == Intent.ACTION_SEND) {
+            Domains.hostsInText(intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty() + " " + intent.getStringExtra(Intent.EXTRA_SUBJECT).orEmpty())
+        } else emptyList()
+        val g = AppGraph.get(this)
+        setContent {
+            val settings by g.settings.state.collectAsStateWithLifecycle()
+            CleanWebTheme(settings.theme) { QuickBlockScreen(shared, onClose = { finish() }) }
+        }
+    }
+
+    companion object {
+        fun intent(context: Context) = Intent(context, QuickBlockActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+    }
+}
+
+private class SiteRow(val site: String, val hosts: List<String>, val app: String?, val lastSeen: Long, val blocked: Boolean)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QuickBlockScreen(shared: List<String>, onClose: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val g = remember { AppGraph.get(ctx) }
+    val scope = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
+    var rows by remember { mutableStateOf<List<SiteRow>>(emptyList()) }
+    var refresh by remember { mutableIntStateOf(0) }
+    var confirm by remember { mutableStateOf<String?>(null) }
+    val changes by g.log.changes.collectAsStateWithLifecycle()
+    val fmt = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+
+    LaunchedEffect(changes, refresh) {
+        rows = withContext(Dispatchers.IO) {
+            val recent = g.log.recentDomains(System.currentTimeMillis() - WINDOW_MS, 300)
+            recent.groupBy { Domains.site(it.domain) }.map { (site, list) ->
+                SiteRow(
+                    site = site,
+                    hosts = list.map { it.domain },
+                    app = list.firstNotNullOfOrNull { it.app },
+                    lastSeen = list.maxOf { it.lastSeen },
+                    blocked = g.filters.isBlocked(site, BlockerState.engine) || list.all { it.blocked },
+                )
+            }.sortedByDescending { it.lastSeen }
+        }
+    }
+
+    fun block(site: String) = scope.launch {
+        withContext(Dispatchers.IO) { g.filters.blockDomain(site) }
+        refresh++
+        val r = snackbar.showSnackbar(ctx.getString(R.string.qb_blocked, site), ctx.getString(R.string.qb_undo), duration = androidx.compose.material3.SnackbarDuration.Long)
+        if (r == SnackbarResult.ActionPerformed) {
+            withContext(Dispatchers.IO) { g.filters.unblockDomain(site) }
+            refresh++
+        }
+    }
+    fun ask(site: String) { if (Domains.isEssential(site)) confirm = site else block(site) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.qb_title)) },
+                navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.Filled.Close, stringResource(R.string.back)) } },
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbar) },
+    ) { padding ->
+        LazyColumn(Modifier.fillMaxSize().padding(padding)) {
+            if (shared.isNotEmpty()) {
+                item {
+                    Card(Modifier.fillMaxWidth().padding(16.dp)) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(stringResource(R.string.qb_shared_title), style = MaterialTheme.typography.titleSmall)
+                            shared.forEach { host ->
+                                val site = Domains.site(host)
+                                val already = g.filters.isBlocked(host, BlockerState.engine)
+                                Text(host, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                if (already) {
+                                    Text(stringResource(R.string.qb_already), style = MaterialTheme.typography.bodySmall)
+                                } else {
+                                    Button(onClick = { ask(site) }, modifier = Modifier.fillMaxWidth()) {
+                                        Text(stringResource(R.string.qb_block_site, site))
+                                    }
+                                    if (host != site) {
+                                        OutlinedButton(onClick = { scope.launch { withContext(Dispatchers.IO) { g.filters.blockDomain(host) }; refresh++; snackbar.showSnackbar(ctx.getString(R.string.qb_blocked, host)) } }, modifier = Modifier.fillMaxWidth()) {
+                                            Text(stringResource(R.string.qb_block_host))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            item {
+                Text(
+                    stringResource(R.string.qb_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
+            if (rows.isEmpty()) {
+                item { Text(stringResource(R.string.qb_empty), Modifier.padding(16.dp)) }
+            }
+            items(rows, key = { it.site }) { row ->
+                ListItem(
+                    headlineContent = { Text(row.site, fontWeight = FontWeight.Medium) },
+                    supportingContent = {
+                        Text(
+                            listOfNotNull(fmt.format(Date(row.lastSeen)), row.app, row.hosts.take(3).joinToString(", ")).joinToString(" · "),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    },
+                    trailingContent = {
+                        if (row.blocked) {
+                            Text(stringResource(R.string.log_status_blocked), color = BlockedColor, style = MaterialTheme.typography.labelMedium)
+                        } else {
+                            TextButton(onClick = { ask(row.site) }) { Text(stringResource(R.string.qb_block)) }
+                        }
+                    },
+                )
+                HorizontalDivider()
+            }
+        }
+    }
+
+    confirm?.let { site ->
+        AlertDialog(
+            onDismissRequest = { confirm = null },
+            title = { Text(stringResource(R.string.qb_essential_title, site)) },
+            text = { Text(stringResource(R.string.qb_essential_body)) },
+            confirmButton = { TextButton(onClick = { block(site); confirm = null }) { Text(stringResource(R.string.qb_block)) } },
+            dismissButton = { TextButton(onClick = { confirm = null }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+}
+
+private const val WINDOW_MS = 5 * 60_000L

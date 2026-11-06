@@ -9,6 +9,7 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import app.cleanweb.R
 import app.cleanweb.ui.MainActivity
+import app.cleanweb.ui.QuickBlockActivity
 import app.cleanweb.vpn.BlockerVpnService
 import app.cleanweb.vpn.ProtectionStatus
 
@@ -53,6 +54,10 @@ object Notifications {
             .setShowWhen(false)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+        b.addAction(
+            0, context.getString(R.string.qb_notif_action),
+            PendingIntent.getActivity(context, 4, QuickBlockActivity.intent(context), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT),
+        )
         if (paused) {
             b.addAction(0, context.getString(R.string.action_resume), serviceIntent(context, BlockerVpnService.ACTION_RESUME, 2))
         } else {

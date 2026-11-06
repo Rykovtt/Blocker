@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -164,6 +165,16 @@ fun HomeScreen(vm: MainViewModel, startProtection: ((Boolean) -> Unit) -> Unit, 
                 }
             }
         }
+        Button(
+            onClick = { ctx.startActivity(QuickBlockActivity.intent(ctx)) },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+        ) { Text(stringResource(R.string.qb_home_button)) }
+        Text(
+            stringResource(R.string.qb_home_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
         AlertCard(
             stringResource(R.string.push_card_title), stringResource(R.string.push_card_body),
             stringResource(R.string.push_card_action), { pushHelp = true },

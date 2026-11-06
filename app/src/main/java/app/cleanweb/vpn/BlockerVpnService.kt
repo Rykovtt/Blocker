@@ -175,6 +175,7 @@ class BlockerVpnService : VpnService() {
                 val e = runCatching { graph.filters.buildEngine() }.getOrNull()
                 if (e != null) {
                     engine = e
+                    BlockerState.engine = e
                     BlockerState.ruleCount.value = e.ruleCount
                 }
                 resolver?.clearCache()

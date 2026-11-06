@@ -113,6 +113,15 @@ class QueryLog(context: Context) {
             arrayOf(since.toString()),
         ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0) to c.getInt(1)) } }
 
+    data class RecentDomain(val domain: String, val lastSeen: Long, val app: String?, val blocked: Boolean)
+
+    /** Distinct domains seen since [since], newest first. */
+    fun recentDomains(since: Long, limit: Int): List<RecentDomain> =
+        db.rawQuery(
+            "SELECT domain, MAX(ts) t, MAX(app), MAX(status = 1) FROM log WHERE ts >= ? GROUP BY domain ORDER BY t DESC LIMIT $limit",
+            arrayOf(since.toString()),
+        ).use { c -> buildList { while (c.moveToNext()) add(RecentDomain(c.getString(0), c.getLong(1), c.getString(2), c.getInt(3) == 1)) } }
+
     fun purgeOlderThan(days: Int) {
         val cutoff = System.currentTimeMillis() - days * 86_400_000L
         writer.execute { db.delete("log", "ts < ?", arrayOf(cutoff.toString())) }

@@ -40,6 +40,20 @@
 
         <!-- systemExempted is granted to prepared VPN apps via the ACTIVATE_VPN app-op,
              which lint does not know about. specialUse is the fallback. -->
+        <!-- "Share → CleanWeb" from the browser blocks the ad page that opened. -->
+        <activity
+            android:name=".ui.QuickBlockActivity"
+            android:exported="true"
+            android:label="@string/qb_share_label"
+            android:taskAffinity=""
+            android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".vpn.BlockerVpnService"
             android:exported="false"

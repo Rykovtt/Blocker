@@ -171,6 +171,16 @@ class FilterRepository(private val context: Context) {
         if (rules.lines().none { it.trim() == rule }) setUserRules(appendLine(rules, rule))
     }
 
+    /** Undo of [blockDomain]: removes the user rule only (does not whitelist). */
+    fun unblockDomain(domain: String) {
+        setUserRules(userRules().lines().filterNot { it.trim() == "||$domain^" }.joinToString("\n"))
+    }
+
+    /** Whether the current rules (lists + user rules) block [domain]. */
+    fun isBlocked(domain: String, engine: app.cleanweb.filter.FilterEngine?): Boolean =
+        engine?.check(domain) == app.cleanweb.filter.Verdict.BLOCKED ||
+            userRules().lines().any { it.trim() == "||$domain^" }
+
     /** One-tap action from the log: allow a domain (and drop a matching user block rule). */
     fun allowDomain(domain: String) {
         setUserRules(userRules().lines().filterNot { it.trim() == "||$domain^" || it.trim() == domain }.joinToString("\n"))
