@@ -68,6 +68,7 @@ fun HomeScreen(vm: MainViewModel, startProtection: ((Boolean) -> Unit) -> Unit, 
     val privateDns by vm.privateDns.collectAsStateWithLifecycle()
     val batteryOk by vm.batteryOk.collectAsStateWithLifecycle()
     val pausedUntil by vm.pausedUntil.collectAsStateWithLifecycle()
+    val risky by vm.riskyBlocks.collectAsStateWithLifecycle()
     val nf = remember { NumberFormat.getIntegerInstance() }
 
     val on = status != ProtectionStatus.STOPPED
@@ -169,6 +170,15 @@ fun HomeScreen(vm: MainViewModel, startProtection: ((Boolean) -> Unit) -> Unit, 
         }
 
         // ---- Problems that need the user ----
+        if (risky.isNotEmpty()) {
+            AlertCard(
+                stringResource(R.string.risky_title),
+                stringResource(R.string.risky_body, risky.joinToString(", ")),
+                stringResource(R.string.risky_action),
+                { vm.unblockRisky(risky) },
+                error = true,
+            )
+        }
         error?.let { AlertCard(stringResource(R.string.home_problem), stringResource(it), null, {}, error = true) }
         if (privateDns) {
             AlertCard(

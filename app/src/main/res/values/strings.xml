@@ -48,7 +48,12 @@
     <string name="home_button_off">OFF</string>
     <string name="home_button_on">ON</string>
     <string name="home_mode_dns">DNS filtering: ads, trackers and malicious domains</string>
-    <string name="home_mode_hardcoded">Apps that ask Google, Cloudflare or other public DNS directly are filtered too.</string>
+    <string name="home_mode_hardcoded">Banks, payments and government services are never blocked.</string>
+    <string name="risky_title">Your rules block important services</string>
+    <string name="risky_body">These domains are needed by many apps, so blocking them can cause \"no network\" errors: %1$s</string>
+    <string name="risky_action">Unblock</string>
+    <string name="msg_unblocked">Unblocked</string>
+    <string name="qb_protected">%1$s is a bank or important service and is never blocked</string>
     <string name="push_card_action">Turn off site notifications</string>
     <string name="push_title">Site notifications</string>
     <string name="push_body">Open your browser below and turn off notifications from unknown sites (or all sites). In Chrome you can also go to Settings → Site settings → Notifications.</string>

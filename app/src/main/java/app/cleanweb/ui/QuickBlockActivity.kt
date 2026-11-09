@@ -118,7 +118,14 @@ private fun QuickBlockScreen(shared: List<String>, onClose: () -> Unit) {
             refresh++
         }
     }
-    fun ask(site: String) { if (Domains.isEssential(site)) confirm = site else block(site) }
+    val protectedSites = remember { g.filters.protectedDomains().map { Domains.site(it) }.toSet() }
+    fun ask(site: String) {
+        when {
+            site in protectedSites -> scope.launch { snackbar.showSnackbar(ctx.getString(R.string.qb_protected, site)) }
+            Domains.isEssential(site) -> confirm = site
+            else -> block(site)
+        }
+    }
 
     val c = Cw.colors
     Scaffold(

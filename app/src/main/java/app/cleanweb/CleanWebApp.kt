@@ -23,6 +23,7 @@ class CleanWebApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         val g = AppGraph.get(this)
+        g.filters.migrate()
         Notifications.createChannels(this)
         FilterUpdateWorker.schedule(this, g.settings.current.wifiOnlyUpdates)
         g.log.purgeOlderThan(g.settings.current.logRetentionDays)

@@ -1,5 +1,7 @@
 package app.cleanweb.vpn
 
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.VpnService
 import app.cleanweb.data.DnsProtocol
 import app.cleanweb.data.SettingsState
@@ -19,6 +21,8 @@ import java.net.URL
  *
  * The app itself is excluded from the VPN, so these sockets use the normal network.
  */
+private val GOOGLE = listOf(InetAddress.getByAddress(byteArrayOf(8, 8, 8, 8)))
+
 class UpstreamResolver(private val vpn: VpnService, settings: SettingsState) {
     private val dohUrl: URL?
     private val dot: DotClient?
@@ -71,10 +75,7 @@ class UpstreamResolver(private val vpn: VpnService, settings: SettingsState) {
             val hit = cache[key]
             if (hit != null && hit.expires > now) return Dns.withId(hit.data, q.id)
         }
-        val resp = (dot?.let { runCatching { it.exchange(query) }.getOrNull() })
-            ?: (dohUrl?.let { runCatching { doh(it, query) }.getOrNull() })
-            ?: runCatching { udp(query) }.getOrNull()
-            ?: return null
+        val resp = encrypted(query) ?: plainFallback(query) ?: return null
         val rcode = Dns.rcode(resp)
         if (rcode == 0 || rcode == 3) {
             val ttl = (Dns.minTtl(resp) ?: 60).coerceIn(10, 3600)
@@ -84,6 +85,52 @@ class UpstreamResolver(private val vpn: VpnService, settings: SettingsState) {
     }
 
     fun clearCache() = synchronized(cache) { cache.clear() }
+
+    // ---- failover ----
+    // Some networks block DoH/DoT. After 3 failures in a row the encrypted server is skipped
+    // for a minute, and queries go to plain DNS so the internet keeps working.
+    @Volatile private var encryptedFailures = 0
+    @Volatile private var encryptedSkipUntil = 0L
+
+    private fun encrypted(query: ByteArray): ByteArray? {
+        if (dot == null && dohUrl == null) return null
+        if (System.currentTimeMillis() < encryptedSkipUntil) return null
+        val r = (dot?.let { runCatching { it.exchange(query) }.getOrNull() })
+            ?: (dohUrl?.let { runCatching { doh(it, query) }.getOrNull() })
+        if (r != null) {
+            encryptedFailures = 0
+        } else if (++encryptedFailures >= 3) {
+            encryptedSkipUntil = System.currentTimeMillis() + 60_000
+            encryptedFailures = 0
+        }
+        return r
+    }
+
+    /** Provider over plain DNS, then the network's own DNS servers, then Google. */
+    private fun plainFallback(query: ByteArray): ByteArray? {
+        for (server in fallbackServers()) {
+            runCatching { return udp(query, server) }
+        }
+        return null
+    }
+
+    @Volatile private var systemDns: List<InetAddress> = emptyList()
+    @Volatile private var systemDnsAt = 0L
+
+    private fun fallbackServers(): List<InetAddress> {
+        val now = System.currentTimeMillis()
+        if (now - systemDnsAt > 30_000) {
+            systemDns = runCatching {
+                val cm = vpn.getSystemService(ConnectivityManager::class.java)
+                @Suppress("DEPRECATION")
+                cm.allNetworks.filter { n ->
+                    cm.getNetworkCapabilities(n)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == false
+                }.flatMap { n -> cm.getLinkProperties(n)?.dnsServers.orEmpty() }
+            }.getOrDefault(emptyList())
+            systemDnsAt = now
+        }
+        return (listOf(udpServer) + systemDns + GOOGLE).distinct()
+    }
 
     fun close() = dot?.close()
 
@@ -115,11 +162,11 @@ class UpstreamResolver(private val vpn: VpnService, settings: SettingsState) {
         }
     }
 
-    private fun udp(query: ByteArray): ByteArray {
+    private fun udp(query: ByteArray, server: InetAddress): ByteArray {
         DatagramSocket().use { socket ->
             vpn.protect(socket)
-            socket.soTimeout = 3000
-            socket.send(DatagramPacket(query, query.size, udpServer, 53))
+            socket.soTimeout = 2000
+            socket.send(DatagramPacket(query, query.size, server, 53))
             val buf = ByteArray(4096)
             val packet = DatagramPacket(buf, buf.size)
             while (true) {

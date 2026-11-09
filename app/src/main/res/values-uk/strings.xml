@@ -47,7 +47,12 @@
     <string name="home_button_off">ВИМК</string>
     <string name="home_button_on">УВІМК</string>
     <string name="home_mode_dns">DNS-фільтрація: реклама, трекери та шкідливі домени</string>
-    <string name="home_mode_hardcoded">Застосунки, що звертаються до Google, Cloudflare та інших публічних DNS напряму, теж фільтруються.</string>
+    <string name="home_mode_hardcoded">Банки, платежі та держпослуги ніколи не блокуються.</string>
+    <string name="risky_title">Ваші правила блокують важливі сервіси</string>
+    <string name="risky_body">Ці домени потрібні багатьом застосункам, їх блокування спричиняє помилки «немає мережі»: %1$s</string>
+    <string name="risky_action">Розблокувати</string>
+    <string name="msg_unblocked">Розблоковано</string>
+    <string name="qb_protected">%1$s — банк або важливий сервіс, він не блокується</string>
     <string name="push_card_action">Вимкнути сповіщення сайтів</string>
     <string name="push_title">Сповіщення сайтів</string>
     <string name="push_body">Відкрийте браузер нижче та вимкніть сповіщення від незнайомих сайтів (або від усіх). У Chrome також: Налаштування → Налаштування сайтів → Сповіщення.</string>

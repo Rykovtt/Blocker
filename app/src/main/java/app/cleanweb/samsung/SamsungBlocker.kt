@@ -70,7 +70,8 @@ object SamsungBlocker {
                 line(it)
                 popupRule(it)?.let(::line)
             }
-            // Whitelist: never touch these sites.
+            // Protected sites (banks, payments, government) and the whitelist: never touch these.
+            filters.protectedDomains().forEach { line("@@||$it^\$document") }
             filters.whitelist().lineSequence().map { it.substringBefore('#').trim() }.filter { it.isNotEmpty() }.forEach {
                 line("@@||${it.removePrefix("@@").removePrefix("||").removeSuffix("^")}^\$document")
             }

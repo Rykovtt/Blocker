@@ -71,6 +71,7 @@ class BlockerVpnService : VpnService() {
     @Volatile private var engine: FilterEngine = FilterEngine.EMPTY
     @Volatile private var resolver: UpstreamResolver? = null
     @Volatile private var paused = false
+    @Volatile private var unfilteredUids: Set<Int> = emptySet()
 
     private val appNames = ConcurrentHashMap<Int, String>()
     private val resumeRunnable = Runnable { resume() }
@@ -131,19 +132,24 @@ class BlockerVpnService : VpnService() {
             .addAddress(TUN_V6, 128)
             .addRoute(DNS_V6, 128)
             .addDnsServer(DNS_V6)
-        // Apps that skip system DNS and ask a public resolver directly are caught too.
-        for (ip in HARDCODED_DNS_V4) builder.addRoute(ip, 32)
-        for (ip in HARDCODED_DNS_V6) builder.addRoute(ip, 128)
+        // Only our own DNS address is routed into the tunnel. Public resolvers such as 8.8.8.8
+        // are NOT captured: many apps ping them to check for internet and would think they are offline.
         if (Build.VERSION.SDK_INT >= 29) builder.setMetered(false)
         // Our own traffic (DoH, list downloads) must not loop through the tunnel.
         builder.addDisallowedApplication(packageName)
+        // With Android's "Block connections without VPN" on, apps left outside the VPN get no
+        // internet at all. Then excluded apps stay inside and their DNS is simply not filtered.
+        val lockdown = Build.VERSION.SDK_INT >= 29 && runCatching { isLockdownEnabled }.getOrDefault(false)
+        val uids = HashSet<Int>()
         for (pkg in settings.excludedApps) {
             try {
-                builder.addDisallowedApplication(pkg)
+                uids.add(packageManager.getPackageUid(pkg, 0))
+                if (!lockdown) builder.addDisallowedApplication(pkg)
             } catch (_: PackageManager.NameNotFoundException) {
                 // not installed
             }
         }
+        unfilteredUids = if (lockdown) uids else emptySet()
         packageManager.getLaunchIntentForPackage(packageName)?.let {
             builder.setConfigureIntent(Notifications.openAppIntent(this))
         }
@@ -233,12 +239,7 @@ class BlockerVpnService : VpnService() {
                         if (e.errno == OsConstants.EAGAIN || e.errno == OsConstants.EINTR) continue else break
                     }
                     if (n <= 0) continue
-                    val pkt = Packets.parseUdp(buf, n)
-                    if (pkt == null) {
-                        // TCP to a captured resolver (DoH/DoT/DNS-over-TCP): refuse so the app falls back to normal DNS.
-                        Packets.parseTcpSyn(buf, n)?.let { syn -> runCatching { tunnel.write(Packets.buildRst(syn)) } }
-                        continue
-                    }
+                    val pkt = Packets.parseUdp(buf, n) ?: continue
                     if (pkt.dstPort != 53) continue
                     try {
                         workers.execute { handle(pkt, tunnel) }
@@ -282,7 +283,12 @@ class BlockerVpnService : VpnService() {
 
     private fun handle(pkt: UdpPacket, tunnel: Tunnel) {
         val q = Dns.parseQuery(pkt.payload) ?: return
-        val verdict = if (paused) Verdict.NONE else engine.check(q.name)
+        val uid = uidFor(pkt)
+        val verdict = when {
+            paused -> Verdict.NONE
+            uid != null && uid in unfilteredUids -> Verdict.NONE // excluded app under VPN lockdown
+            else -> engine.check(q.name)
+        }
         val response: ByteArray
         val status: QueryStatus
         if (q.name == FIREFOX_DOH_CANARY) {
@@ -309,22 +315,22 @@ class BlockerVpnService : VpnService() {
         }
         if (status == QueryStatus.BLOCKED) BlockerState.blockedSinceStart.value++
         if (graph.settings.current.logEnabled) {
-            graph.log.record(LogEntry(System.currentTimeMillis(), q.name, q.qtype, appFor(pkt), status))
+            val app = uid?.let { u -> appNames.getOrPut(u) { labelForUid(u) } }
+            graph.log.record(LogEntry(System.currentTimeMillis(), q.name, q.qtype, app, status))
         }
     }
 
-    /** Which app sent the query (Android 10+). */
+    /** Which app (uid) sent the query (Android 10+). */
     @SuppressLint("NewApi")
-    private fun appFor(pkt: UdpPacket): String? {
+    private fun uidFor(pkt: UdpPacket): Int? {
         if (Build.VERSION.SDK_INT < 29) return null
         return try {
             val cm = getSystemService(ConnectivityManager::class.java)
-            val uid = cm.getConnectionOwnerUid(
+            cm.getConnectionOwnerUid(
                 OsConstants.IPPROTO_UDP,
                 InetSocketAddress(InetAddress.getByAddress(pkt.srcAddr), pkt.srcPort),
                 InetSocketAddress(InetAddress.getByAddress(pkt.dstAddr), pkt.dstPort),
-            )
-            if (uid < 0) null else appNames.getOrPut(uid) { labelForUid(uid) }
+            ).takeIf { it >= 0 }
         } catch (_: Exception) {
             null
         }
@@ -406,15 +412,6 @@ class BlockerVpnService : VpnService() {
         private const val DNS_V6 = "fd66:6c74:7765::1"
 
         private const val FIREFOX_DOH_CANARY = "use-application-dns.net"
-
-        private val HARDCODED_DNS_V4 = listOf(
-            "8.8.8.8", "8.8.4.4", "1.1.1.1", "1.0.0.1", "9.9.9.9", "149.112.112.112",
-            "208.67.222.222", "208.67.220.220", "94.140.14.14", "94.140.15.15", "77.88.8.8", "77.88.8.1",
-        )
-        private val HARDCODED_DNS_V6 = listOf(
-            "2001:4860:4860::8888", "2001:4860:4860::8844", "2606:4700:4700::1111", "2606:4700:4700::1001",
-            "2620:fe::fe", "2620:fe::9",
-        )
 
         const val ACTION_START = "app.cleanweb.action.START"
         const val ACTION_STOP = "app.cleanweb.action.STOP"

@@ -47,7 +47,12 @@
     <string name="home_button_off">ВЫКЛ</string>
     <string name="home_button_on">ВКЛ</string>
     <string name="home_mode_dns">DNS-фильтрация: реклама, трекеры и вредоносные домены</string>
-    <string name="home_mode_hardcoded">Приложения, которые обращаются к Google, Cloudflare и другим публичным DNS напрямую, тоже фильтруются.</string>
+    <string name="home_mode_hardcoded">Банки, платежи и госуслуги никогда не блокируются.</string>
+    <string name="risky_title">Ваши правила блокируют важные сервисы</string>
+    <string name="risky_body">Эти домены нужны многим приложениям, их блокировка вызывает ошибки «нет сети»: %1$s</string>
+    <string name="risky_action">Разблокировать</string>
+    <string name="msg_unblocked">Разблокировано</string>
+    <string name="qb_protected">%1$s — банк или важный сервис, он не блокируется</string>
     <string name="push_card_action">Отключить уведомления сайтов</string>
     <string name="push_title">Уведомления сайтов</string>
     <string name="push_body">Откройте браузер ниже и отключите уведомления от незнакомых сайтов (или от всех). В Chrome также: Настройки → Настройки сайтов → Уведомления.</string>

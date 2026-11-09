@@ -176,6 +176,39 @@ class FilterRepository(private val context: Context) {
     fun needsFullRedownload() = prefs.getInt(K_FORMAT, 1) < 2 && _lists.value.any { isDownloaded(it.id) }
     fun markFullDownloaded() = prefs.edit().putInt(K_FORMAT, 2).apply()
 
+    /** Banks, payments, government and Android connectivity checks: never blocked. */
+    fun protectedDomains(): List<String> =
+        context.assets.open("protected_allowlist.txt").bufferedReader().useLines { lines ->
+            lines.map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("!") }.toList()
+        }
+
+    /** The user's own block rules that hit an important or protected domain. */
+    fun riskyUserBlocks(): List<String> {
+        val protected = protectedDomains()
+        return userRules().lines().map { it.trim() }.mapNotNull { line ->
+            val d = line.removePrefix("||").removeSuffix("^").takeIf { line.startsWith("||") && line.endsWith("^") } ?: return@mapNotNull null
+            val site = app.cleanweb.filter.Domains.site(d)
+            if (app.cleanweb.filter.Domains.isEssential(site) || protected.any { app.cleanweb.filter.Domains.site(it) == site || d.endsWith(".$it") || d == it }) d else null
+        }
+    }
+
+    fun removeUserBlocks(domains: Collection<String>) {
+        val drop = domains.map { "||$it^" }.toSet()
+        setUserRules(userRules().lines().filterNot { it.trim() in drop }.joinToString("\n"))
+    }
+
+    /**
+     * One-time fixes for problems shipped in earlier versions:
+     * v1.7: the abused-TLD list blocked whole zones (.biz, .shop, .рф, .укр …) — turn it off.
+     */
+    fun migrate() {
+        if (prefs.getInt(K_MIGRATION, 0) < 1) {
+            modify("hagezi_tlds") { it.copy(enabled = false) }
+            prefs.edit().putInt(K_MIGRATION, 1).apply()
+            bump()
+        }
+    }
+
     fun listFile(id: String) = File(dir, "$id.txt")
 
     fun userRules(): String = userRulesFile.takeIf { it.exists() }?.readText() ?: ""
@@ -226,6 +259,7 @@ class FilterRepository(private val context: Context) {
             if (f.exists()) f.bufferedReader().useLines { rules.addAll(it) }
         }
         userRules().lineSequence().forEach { rules.addLine(it) }
+        protectedDomains().forEach { rules.allow(it) }
         whitelist().lineSequence().forEach { line ->
             val d = line.substringBefore('#').trim().removePrefix("@@").removePrefix("||").removeSuffix("^")
             if (d.isNotEmpty()) rules.allow(d)
@@ -252,6 +286,7 @@ class FilterRepository(private val context: Context) {
     companion object {
         private const val K_LISTS = "lists"
         private const val K_FORMAT = "file_format"
+        private const val K_MIGRATION = "migration"
 
         private const val GH = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/"
         private val HAGEZI_MIRRORS = listOf(
@@ -274,8 +309,8 @@ class FilterRepository(private val context: Context) {
             FilterList("urlhaus", "URLhaus Malicious URL Blocklist", "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-agh.txt", true, true),
             // Pop-up, pop-under and redirect ad networks.
             hagezi("hagezi_popup", "HaGeZi Pop-Up Ads", "popupads.txt", true),
-            // Whole abused domain zones (.win, .bid, …): stops pop-ups from endlessly rotating random domains.
-            hagezi("hagezi_tlds", "HaGeZi Abused TLDs", "spam-tlds.txt", true),
+            // Whole domain zones (.win, .biz, .shop, .рф …). Off: it blocks many normal sites too.
+            hagezi("hagezi_tlds", "HaGeZi Abused TLDs (aggressive)", "spam-tlds.txt", false),
             // Browsers' own encrypted DNS (Chrome/Samsung "Secure DNS") would skip the filter; blocking it makes them fall back.
             hagezi("hagezi_doh", "HaGeZi Encrypted DNS Bypass", "doh.txt", true),
             // Stronger all-in-one list; off by default because it can break some sites.

@@ -91,6 +91,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
+    // ---- safety: user blocks that break important apps ----
+    val riskyBlocks = g.filters.version.map { g.filters.riskyUserBlocks() }
+        .flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun unblockRisky(domains: List<String>) = io {
+        g.filters.removeUserBlocks(domains)
+        _messages.emit(R.string.msg_unblocked)
+    }
+
     // ---- log ----
     val logFilter = MutableStateFlow<QueryStatus?>(null)
     val logSearch = MutableStateFlow("")

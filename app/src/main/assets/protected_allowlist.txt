@@ -1,0 +1,64 @@
+! Never blocked, whatever the lists or the user's quick-block taps say.
+! Banks and payments (Ukraine)
+privatbank.ua
+privat24.ua
+pb.ua
+privatbank.com.ua
+monobank.ua
+monobank.com.ua
+mono.bank
+universalbank.com.ua
+oschadbank.ua
+raiffeisen.ua
+aval.ua
+pumb.ua
+ukrsibbank.com
+abank.com.ua
+sensebank.com.ua
+otpbank.com.ua
+ukrgasbank.com
+izibank.com.ua
+creditagricole.ua
+procreditbank.com.ua
+bank.gov.ua
+liqpay.ua
+portmone.com.ua
+easypay.ua
+ipay.ua
+fondy.eu
+wayforpay.com
+novapay.ua
+! Government (Ukraine)
+gov.ua
+diia.gov.ua
+diia.app
+! Banks and government (other)
+sberbank.ru
+tbank.ru
+tinkoff.ru
+vtb.ru
+alfabank.ru
+gosuslugi.ru
+nalog.gov.ru
+belarusbank.by
+! Payments (international)
+paypal.com
+paypalobjects.com
+visa.com
+mastercard.com
+stripe.com
+pay.google.com
+payments.google.com
+wallet.google.com
+samsungpay.com
+apple.com
+! Android internet checks: blocking these makes the phone show "no internet"
+connectivitycheck.gstatic.com
+connectivitycheck.android.com
+clients3.google.com
+clients1.google.com
+www.google.com
+play.googleapis.com
+android.googleapis.com
+mtalk.google.com
+connectivity.samsung.com.cn
